@@ -1,0 +1,56 @@
+include(FetchContent)
+
+FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw.git
+        GIT_TAG 3.4
+        GIT_SHALLOW TRUE
+)
+
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(glfw)
+
+add_executable(SkyApp
+        src/main.cpp
+        src/Window.cpp
+        src/Window.h
+)
+
+# ---------- Компиляция шейдеров ----------
+find_program(GLSLC NAMES glslc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
+
+set(SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+set(SHADER_BIN_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+file(MAKE_DIRECTORY ${SHADER_BIN_DIR})
+
+set(SHADERS
+        ${SHADER_SRC_DIR}/triangle.vert
+        ${SHADER_SRC_DIR}/triangle.frag
+)
+
+set(SPIRV_BINARIES "")
+foreach(SHADER ${SHADERS})
+    get_filename_component(SHADER_NAME ${SHADER} NAME)
+    set(SPIRV_OUT ${SHADER_BIN_DIR}/${SHADER_NAME}.spv)
+    add_custom_command(
+            OUTPUT ${SPIRV_OUT}
+            COMMAND ${GLSLC} ${SHADER} -o ${SPIRV_OUT}
+            DEPENDS ${SHADER}
+            COMMENT "Compiling ${SHADER_NAME} -> SPIR-V"
+            VERBATIM
+    )
+    list(APPEND SPIRV_BINARIES ${SPIRV_OUT})
+endforeach()
+
+add_custom_target(CompileShaders DEPENDS ${SPIRV_BINARIES})
+add_dependencies(SkyApp CompileShaders)
+
+target_compile_definitions(SkyApp PRIVATE SHADER_DIR="${SHADER_BIN_DIR}")
+# ---------- Конец компиляции шейдеров ----------
+
+target_link_libraries(SkyApp PRIVATE SkyRenderer glfw)
+target_compile_definitions(SkyApp PRIVATE GLFW_INCLUDE_VULKAN)
