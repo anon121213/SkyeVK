@@ -1,7 +1,7 @@
-#include "SkyRenderer/VulkanRenderPass.h"
-#include "SkyRenderer/VulkanDevice.h"
+#include "skypch.h"
 
-#include <stdexcept>
+#include "VulkanDevice.h"
+#include "VulkanRenderPass.h"
 
 VulkanRenderPass::VulkanRenderPass(const VulkanDevice& device, const VkFormat colorFormat)
 {
@@ -42,8 +42,10 @@ VulkanRenderPass::VulkanRenderPass(const VulkanDevice& device, const VkFormat co
   renderPassInfo.dependencyCount = 1;
   renderPassInfo.pDependencies = &dependency;
 
-  if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create vulkan render pass");
+  SKY_RHI_VK_CHECK(vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass),
+               "Failed to create Vulkan render pass");
+
+  SKY_RHI_INFO("Render pass created");
 }
 
 VulkanRenderPass::~VulkanRenderPass()

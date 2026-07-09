@@ -1,46 +1,48 @@
-#include "SkyRenderer/VulkanCommandPool.h"
-#include "SkyRenderer/VulkanDevice.h"
-#include "SkyRenderer/VulkanFramebuffers.h"
-#include "SkyRenderer/VulkanInstance.h"
-#include "SkyRenderer/VulkanPipeline.h"
-#include "SkyRenderer/VulkanRenderPass.h"
-#include "SkyRenderer/VulkanRenderer.h"
-#include "SkyRenderer/VulkanShaderModule.h"
-#include "SkyRenderer/VulkanSurface.h"
-#include "SkyRenderer/VulkanSwapchain.h"
+#include "../../src/skypch.h"
+
+#include "SkyRHI/Device.h"
 #include "Window.h"
 
 int main()
 {
-  const Window window(1920, 1080, "Vulkan test window");
-  const auto extensions = Window::getRequiredInstanceExtensions();
+  Sky::RHI::Log::init();
+  SKY_RHI_INFO("SkyEngine starting up...");
 
-  const VulkanInstance instance("SkyRenderer", "SkyGraphicEngine", extensions);
-
-  VulkanSurface surface(instance, [&window](VkInstance inst){
-    return window.createSurface(inst);
-  });
-
-  VulkanDevice device(instance);
-  VulkanSwapchain swapchain(device, surface, 1920, 1080);
-  VulkanRenderPass renderPass(device, swapchain.imageFormat());
-  VulkanFramebuffers framebuffers(device, swapchain, renderPass);
-
-  VulkanShaderModule vertShader(device, std::string(SHADER_DIR) + "/triangle.vert.spv");
-  VulkanShaderModule fragShader(device, std::string(SHADER_DIR) + "/triangle.frag.spv");
-
-  VulkanPipeline pipeline(device, renderPass, vertShader, fragShader);
-
-  VulkanCommandPool commandPool(device);
-  VulkanRenderer renderer(device, swapchain, renderPass, framebuffers, pipeline, commandPool);
-
-  while (!window.shouldClose())
+  try
   {
-    Window::pollEvents();
-    renderer.drawFrame();
+    const Window window(1920, 1080, "Vulkan test window");
+    const auto extensions = Window::getRequiredInstanceExtensions();
+
+    const Sky::RHI::DeviceCreateInfo info{
+      .backend = Sky::RHI::BackendType::Vulkan,
+      .requiredInstanceExtensions = extensions,
+      .surfaceFactory = [&window](void* instance) -> void* {
+        return window.createSurface(static_cast<VkInstance>(instance));
+      },
+      .initialWindowWidth = window.width(),
+      .initialWindowHeight = window.height(),
+      .enableValidation = true,
+
+      .vertShaderPath = std::string(SHADER_DIR) + "/triangle.vert.spv",
+      .fragShaderPath = std::string(SHADER_DIR) + "/triangle.frag.spv"
+    };
+
+    Sky::RHI::Device device(info);
+
+    while (!window.shouldClose())
+    {
+      Window::pollEvents();
+      device.drawFrame();
+    }
+
+    device.waitIdle();
+  }
+  catch (const std::exception& e)
+  {
+    SKY_RHI_CRITICAL("Fatal error: {}", e.what());
+    return -1;
   }
 
-  renderer.waitIdle();
-
+  Sky::RHI::Log::shutdown();
   return 0;
 }

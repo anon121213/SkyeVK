@@ -1,10 +1,9 @@
-#include "SkyRenderer/VulkanPipeline.h"
-#include "SkyRenderer/VulkanDevice.h"
-#include "SkyRenderer/VulkanRenderPass.h"
-#include "SkyRenderer/VulkanShaderModule.h"
+#include "skypch.h"
 
-#include <array>
-#include <stdexcept>
+#include "VulkanDevice.h"
+#include "VulkanPipeline.h"
+#include "VulkanRenderPass.h"
+#include "VulkanShaderModule.h"
 
 VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanRenderPass& renderPass,
                                const VulkanShaderModule& vertexShader,
@@ -86,8 +85,8 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanRenderPas
   pipelineLayoutInfo.pushConstantRangeCount = 0;
   pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
-  if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_Layout) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create pipline layout");
+  SKY_RHI_VK_CHECK(vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_Layout),
+               "Failed to create pipeline layout");
 
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -107,8 +106,10 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanRenderPas
   pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
   pipelineInfo.basePipelineIndex = -1;
 
-  if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create graphics pipeline");
+  SKY_RHI_VK_CHECK(vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline),
+               "Failed to create graphics pipeline");
+
+  SKY_RHI_INFO("Graphics pipeline created");
 }
 
 VulkanPipeline::~VulkanPipeline() noexcept

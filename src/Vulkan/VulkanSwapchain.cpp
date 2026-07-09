@@ -1,10 +1,8 @@
-#include "SkyRenderer/VulkanSwapchain.h"
+#include "skypch.h"
 
-#include "SkyRenderer/VulkanDevice.h"
-#include "SkyRenderer/VulkanSurface.h"
-
-#include <algorithm>
-#include <stdexcept>
+#include "VulkanDevice.h"
+#include "VulkanSurface.h"
+#include "VulkanSwapchain.h"
 
 VulkanSwapchain::VulkanSwapchain(const VulkanDevice& device, const VulkanSurface& surface,
                                  const uint32_t width, const uint32_t height)
@@ -48,13 +46,15 @@ VulkanSwapchain::VulkanSwapchain(const VulkanDevice& device, const VulkanSurface
   createInfo.clipped = VK_TRUE;
   createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create Vulkan Swapchain");
+  SKY_RHI_VK_CHECK(vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain),
+               "Failed to create Vulkan swapchain");
 
   m_ImageFormat = format.format;
   m_Extent = extent;
 
   createImageViews();
+
+  SKY_RHI_INFO("Swapchain created: {} images, {}x{}", m_Images.size(), m_Extent.width, m_Extent.height);
 }
 
 VulkanSwapchain::~VulkanSwapchain() noexcept
@@ -123,7 +123,7 @@ void VulkanSwapchain::createImageViews()
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_ImageViews[i]) != VK_SUCCESS)
-      throw std::runtime_error("Failed to create image view");
+    SKY_RHI_VK_CHECK(vkCreateImageView(m_Device, &viewInfo, nullptr, &m_ImageViews[i]),
+                 "Failed to create image view");
   }
 }

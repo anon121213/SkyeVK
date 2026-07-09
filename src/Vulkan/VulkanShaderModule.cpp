@@ -1,16 +1,17 @@
-#include "SkyRenderer/VulkanShaderModule.h"
-#include "SkyRenderer/VulkanDevice.h"
+#include "skypch.h"
 
-#include <stdexcept>
-#include <fstream>
-#include <vector>
+#include "VulkanDevice.h"
+#include "VulkanShaderModule.h"
 
 VulkanShaderModule::VulkanShaderModule(const VulkanDevice& device, const std::string& spvPath)
 {
   std::ifstream file(spvPath, std::ios::ate | std::ios::binary);
 
   if (!file.is_open())
+  {
+    SKY_RHI_ERROR("Failed to open shader file: {}", spvPath);
     throw std::runtime_error("Failed to open shader file: " + spvPath);
+  }
 
   const size_t fileSize = file.tellg();
   std::vector<char> buffer(fileSize);
@@ -25,8 +26,10 @@ VulkanShaderModule::VulkanShaderModule(const VulkanDevice& device, const std::st
   createInfo.codeSize = buffer.size();
   createInfo.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
 
-  if (vkCreateShaderModule(m_Device, &createInfo, nullptr, &m_Module) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create vulkan shader module: " + spvPath);
+  SKY_RHI_VK_CHECK(vkCreateShaderModule(m_Device, &createInfo, nullptr, &m_Module),
+               "Failed to create Vulkan shader module");
+
+  SKY_RHI_INFO("Shader loaded: {}", spvPath);
 }
 
 VulkanShaderModule::~VulkanShaderModule() noexcept

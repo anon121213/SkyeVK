@@ -1,5 +1,7 @@
-#include "SkyRenderer/VulkanDevice.h"
-#include "SkyRenderer/VulkanInstance.h"
+#include "skypch.h"
+
+#include "VulkanDevice.h"
+#include "VulkanInstance.h"
 
 VulkanDevice::VulkanDevice(const VulkanInstance& instance)
 {
@@ -8,6 +10,7 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance)
 
   if (devicesCount == 0)
   {
+    SKY_RHI_ERROR("Failed to find Vulkan devices");
     throw std::runtime_error("Failed to find Vulkan devices");
   }
 
@@ -39,6 +42,7 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance)
 
   if (m_PhysicalDevice == VK_NULL_HANDLE)
   {
+    SKY_RHI_ERROR("Failed to find Vulkan physical device");
     throw std::runtime_error("Failed to find Vulkan physical device");
   }
 
@@ -78,10 +82,8 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance)
   deviceCreateInfo.ppEnabledExtensionNames = extensionNames.data();
   deviceCreateInfo.enabledLayerCount = 0;
 
-  if (vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device) != VK_SUCCESS)
-  {
-    throw std::runtime_error("Failed to create logical device");
-  }
+  SKY_RHI_VK_CHECK(vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device),
+               "Failed to create logical device");
 
   VmaAllocatorCreateInfo allocatorInfo{};
   allocatorInfo.physicalDevice   = m_PhysicalDevice;
@@ -89,10 +91,12 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance)
   allocatorInfo.instance         = instance.handle();
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
 
-  if (vmaCreateAllocator(&allocatorInfo, &m_Allocator) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create VMA allocator");
+  SKY_RHI_VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_Allocator),
+               "Failed to create VMA allocator");
 
   vkGetDeviceQueue(m_Device, m_GraphicsFamily, 0, &m_GraphicsQueue);
+
+  SKY_RHI_INFO("Logical device created, graphics queue family = {}", m_GraphicsFamily);
 }
 
 VulkanDevice::~VulkanDevice()

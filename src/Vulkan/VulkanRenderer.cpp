@@ -1,11 +1,12 @@
-#include "SkyRenderer/VulkanRenderer.h"
+#include "skypch.h"
 
-#include "SkyRenderer/VulkanFramebuffers.h"
-#include "SkyRenderer/VulkanPipeline.h"
-#include "SkyRenderer/VulkanRenderPass.h"
-#include "SkyRenderer/VulkanSwapchain.h"
-
-#include <stdexcept>
+#include "VulkanCommandPool.h"
+#include "VulkanDevice.h"
+#include "VulkanFramebuffers.h"
+#include "VulkanPipeline.h"
+#include "VulkanRenderPass.h"
+#include "VulkanRenderer.h"
+#include "VulkanSwapchain.h"
 
 VulkanRenderer::VulkanRenderer(const VulkanDevice& device, const VulkanSwapchain& swapchain,
                                const VulkanRenderPass& renderPass,
@@ -23,16 +24,19 @@ VulkanRenderer::VulkanRenderer(const VulkanDevice& device, const VulkanSwapchain
   VkSemaphoreCreateInfo semInfo{};
   semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-  if (vkCreateSemaphore(m_Device, &semInfo, nullptr, &m_ImageAvailable) != VK_SUCCESS ||
-      vkCreateSemaphore(m_Device, &semInfo, nullptr, &m_RenderFinished) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create semaphores");
+  SKY_RHI_VK_CHECK(vkCreateSemaphore(m_Device, &semInfo, nullptr, &m_ImageAvailable),
+               "Failed to create imageAvailable semaphore");
+  SKY_RHI_VK_CHECK(vkCreateSemaphore(m_Device, &semInfo, nullptr, &m_RenderFinished),
+               "Failed to create renderFinished semaphore");
 
   VkFenceCreateInfo fenceInfo{};
   fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-  if (vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlight) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create fence");
+  SKY_RHI_VK_CHECK(vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlight),
+               "Failed to create inFlight fence");
+
+  SKY_RHI_INFO("Renderer initialized");
 }
 
 VulkanRenderer::~VulkanRenderer() noexcept
@@ -67,8 +71,8 @@ void VulkanRenderer::drawFrame()
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
-  if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlight) != VK_SUCCESS)
-    throw std::runtime_error("Failed to submit draw command buffer");
+  SKY_RHI_VK_CHECK(vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlight),
+               "Failed to submit draw command buffer");
 
   VkPresentInfoKHR presentInfo{};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -91,8 +95,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageInde
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-  if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create command buffer");
+  SKY_RHI_VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo),
+               "Failed to begin command buffer");
 
   VkClearValue clearColor{};
   clearColor.color = {{ 0.0f, 0.0f, 0.05f, 1.0f }};
@@ -127,6 +131,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageInde
 
   vkCmdEndRenderPass(cmd);
 
-  if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
-    throw std::runtime_error("Failed to end command buffer");
+  SKY_RHI_VK_CHECK(vkEndCommandBuffer(cmd),
+               "Failed to end command buffer");
 }

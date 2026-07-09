@@ -1,6 +1,7 @@
-#include "SkyRenderer/VulkanCommandPool.h"
+#include "skypch.h"
 
-#include <stdexcept>
+#include "VulkanCommandPool.h"
+#include "VulkanDevice.h"
 
 VulkanCommandPool::VulkanCommandPool(const VulkanDevice& device)
 {
@@ -11,8 +12,10 @@ VulkanCommandPool::VulkanCommandPool(const VulkanDevice& device)
   poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   poolInfo.queueFamilyIndex = device.graphicFamilyIndex();
 
-  if (vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_Pool) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create command pool");
+  SKY_RHI_VK_CHECK(vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_Pool),
+               "Failed to create command pool");
+
+  SKY_RHI_INFO("Command pool created");
 }
 
 VulkanCommandPool::~VulkanCommandPool() noexcept
@@ -29,8 +32,8 @@ VkCommandBuffer VulkanCommandPool::allocatePrimary() const
   allocInfo.commandBufferCount = 1;
 
   VkCommandBuffer cmd;
-  if (vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd) != VK_SUCCESS)
-    throw std::runtime_error("Failed to allocate command buffer");
+  SKY_RHI_VK_CHECK(vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd),
+               "Failed to allocate command buffer");
 
   return cmd;
 }

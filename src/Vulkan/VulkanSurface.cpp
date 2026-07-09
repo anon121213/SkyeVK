@@ -1,7 +1,7 @@
-#include "SkyRenderer/VulkanSurface.h"
-#include "SkyRenderer/VulkanInstance.h"
+#include "skypch.h"
 
-#include <stdexcept>
+#include "VulkanInstance.h"
+#include "VulkanSurface.h"
 
 VulkanSurface::VulkanSurface(const VulkanInstance& instance, const SurfaceFactory& factory)
 {
@@ -9,7 +9,12 @@ VulkanSurface::VulkanSurface(const VulkanInstance& instance, const SurfaceFactor
   m_Surface = factory(m_Instance);
 
   if (m_Surface == VK_NULL_HANDLE)
+  {
+    SKY_RHI_ERROR("Failed to create Vulkan surface");
     throw std::runtime_error("Failed to create Vulkan surface");
+  }
+
+  SKY_RHI_INFO("Vulkan surface created");
 }
 
 VulkanSurface::~VulkanSurface()

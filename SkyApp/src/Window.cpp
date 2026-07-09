@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 Window::Window(const uint32_t width, const uint32_t height, const std::string& title)
+  : m_Width(width), m_Height(height)
 {
   if (!glfwInit())
   {
@@ -10,7 +11,7 @@ Window::Window(const uint32_t width, const uint32_t height, const std::string& t
   }
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  m_Window = glfwCreateWindow(static_cast<int>(width), static_cast<int>(height), title.c_str(), nullptr, nullptr);
+  m_Window = glfwCreateWindow(static_cast<int>(m_Width), static_cast<int>(m_Height), title.c_str(), nullptr, nullptr);
 
   if (m_Window == nullptr)
   {

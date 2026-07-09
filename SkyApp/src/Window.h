@@ -20,8 +20,11 @@ public:
   [[nodiscard]] GLFWwindow* handle() const;
   [[nodiscard]] VkSurfaceKHR createSurface(VkInstance instance) const;
   [[nodiscard]] static std::vector<const char*> getRequiredInstanceExtensions();
+  [[nodiscard]] uint32_t width() const { return m_Width; }
+  [[nodiscard]] uint32_t height() const { return m_Height; }
 
 private:
   GLFWwindow* m_Window = nullptr;
-
+  uint32_t m_Width;
+  uint32_t m_Height;
 };

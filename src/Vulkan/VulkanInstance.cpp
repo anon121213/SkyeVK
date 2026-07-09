@@ -1,10 +1,6 @@
-#include "SkyRenderer/VulkanInstance.h"
+#include "skypch.h"
 
-#include <vulkan/vulkan.h>
-
-#include <stdexcept>
-#include <vector>
-#include <string>
+#include "VulkanInstance.h"
 
 VulkanInstance::VulkanInstance(const std::string& appName, const std::string& engineName, const std::vector<const char*>& requiredExtensions)
 {
@@ -18,6 +14,7 @@ VulkanInstance::VulkanInstance(const std::string& appName, const std::string& en
 
   if (requiredExtensions.empty())
   {
+    SKY_RHI_ERROR("No window extensions provided");
     throw std::runtime_error("No window extensions provided");
   }
 
@@ -34,10 +31,10 @@ VulkanInstance::VulkanInstance(const std::string& appName, const std::string& en
   createInfo.ppEnabledExtensionNames = extensions.data();
   createInfo.enabledLayerCount = 0;
 
-  if (vkCreateInstance(&createInfo, nullptr, &m_Instance) != VK_SUCCESS)
-  {
-    throw std::runtime_error("Failed to create Vulkan instance");
-  }
+  SKY_RHI_VK_CHECK(vkCreateInstance(&createInfo, nullptr, &m_Instance),
+               "Failed to create Vulkan instance");
+
+  SKY_RHI_INFO("Vulkan instance created ({} extensions)", extensions.size());
 }
 
 VulkanInstance::~VulkanInstance()

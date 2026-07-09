@@ -1,7 +1,9 @@
-#include "SkyRenderer/VulkanFramebuffers.h"
+#include "skypch.h"
 
-#include "SkyRenderer/VulkanRenderPass.h"
-#include "SkyRenderer/VulkanSwapchain.h"
+#include "VulkanDevice.h"
+#include "VulkanFramebuffers.h"
+#include "VulkanRenderPass.h"
+#include "VulkanSwapchain.h"
 
 VulkanFramebuffers::VulkanFramebuffers(const VulkanDevice& device, const VulkanSwapchain& swapchain,
                                        const VulkanRenderPass& render_pass)
@@ -23,9 +25,11 @@ VulkanFramebuffers::VulkanFramebuffers(const VulkanDevice& device, const VulkanS
     frameBufferInfo.height = swapchain.extent().height;
     frameBufferInfo.layers = 1;
 
-    if (vkCreateFramebuffer(m_Device, &frameBufferInfo, nullptr, &m_Framebuffers[i]) != VK_SUCCESS)
-      throw std::runtime_error("Failed to create vulkan framebuffer");
+    SKY_RHI_VK_CHECK(vkCreateFramebuffer(m_Device, &frameBufferInfo, nullptr, &m_Framebuffers[i]),
+                 "Failed to create Vulkan framebuffer");
   }
+
+  SKY_RHI_INFO("Framebuffers created ({})", m_Framebuffers.size());
 }
 
 VulkanFramebuffers::~VulkanFramebuffers() noexcept
