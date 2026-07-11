@@ -3,9 +3,9 @@
 #include "Types.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 namespace Sky::RHI
 {
@@ -41,8 +41,9 @@ public:
   void drawFrame();
   void waitIdle() const;
 
-private:
   struct Impl;
+
+private:
   std::unique_ptr<Impl> m_Impl;
 };
 

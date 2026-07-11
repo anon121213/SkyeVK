@@ -42,6 +42,10 @@ add_library(SkyRenderer STATIC
         src/Vulkan/DeviceImpl.cpp
         include/SkyRHI/Handle.h
         include/SkyRHI/Device.h
+        src/Common/HandleAllocator.h
+        include/SkyRHI/CommandList.h
+        src/Vulkan/CommandList.cpp
+        src/Vulkan/DeviceImpl.h
 )
 
 target_include_directories(SkyRenderer

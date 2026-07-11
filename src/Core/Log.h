@@ -2,14 +2,12 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Core.h"
-
 namespace Sky::RHI::Log
 {
   void init();
   void shutdown() noexcept;
 
-  [[nodiscard]] Ref<spdlog::logger>& get();
+  [[nodiscard]] std::shared_ptr<spdlog::logger>& get();
 }
 
 // ---------- SkyRHI logging macros ----------

@@ -4,7 +4,7 @@
 
 namespace Sky::RHI::Log
 {
-  static Ref<spdlog::logger> s_Logger;
+  static std::shared_ptr<spdlog::logger> s_Logger;
 
   void init()
   {
@@ -19,5 +19,5 @@ namespace Sky::RHI::Log
     spdlog::shutdown();
   }
 
-  Ref<spdlog::logger>& get() { return s_Logger; }
+  std::shared_ptr<spdlog::logger>& get() { return s_Logger; }
 } // namespace Sky::RHI::Log

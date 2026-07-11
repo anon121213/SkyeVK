@@ -1,12 +1,12 @@
 #pragma once
+
 #include "VulkanCommandPool.h"
+#include "SkyRHI/Device.h"
 
 class VulkanDevice;
 class VulkanSwapchain;
 class VulkanRenderPass;
 class VulkanFramebuffers;
-class VulkanPipeline;
-class VulkanCommandPool;
 
 class VulkanRenderer
 {
@@ -15,8 +15,8 @@ public:
                  const VulkanSwapchain& swapchain,
                  const VulkanRenderPass& renderPass,
                  const VulkanFramebuffers& framebuffers,
-                 const VulkanPipeline& pipeline,
-                 const VulkanCommandPool& commandPool);
+                 const VulkanCommandPool& commandPool,
+                 Sky::RHI::Device::Impl& impl);
   ~VulkanRenderer() noexcept;
 
   VulkanRenderer(const VulkanRenderer&) = delete;
@@ -32,7 +32,6 @@ private:
   VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
   VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
   VkRenderPass m_RenderPass = VK_NULL_HANDLE;
-  VkPipeline m_Pipeline = VK_NULL_HANDLE;
 
   VkSemaphore m_ImageAvailable = VK_NULL_HANDLE;
   VkSemaphore m_RenderFinished = VK_NULL_HANDLE;
@@ -42,4 +41,5 @@ private:
 
   const VulkanSwapchain& m_SwapchainRef;
   const VulkanFramebuffers& m_FramebuffersRef;
+  Sky::RHI::Device::Impl* m_DeviceImpl = nullptr;
 };

@@ -1,25 +1,29 @@
 #include "skypch.h"
 
+#include "SkyRHI/CommandList.h"
 #include "VulkanCommandPool.h"
 #include "VulkanDevice.h"
 #include "VulkanFramebuffers.h"
-#include "VulkanPipeline.h"
 #include "VulkanRenderPass.h"
 #include "VulkanRenderer.h"
+
+#include "DeviceImpl.h"
 #include "VulkanSwapchain.h"
 
-VulkanRenderer::VulkanRenderer(const VulkanDevice& device, const VulkanSwapchain& swapchain,
+VulkanRenderer::VulkanRenderer(const VulkanDevice& device,
+                               const VulkanSwapchain& swapchain,
                                const VulkanRenderPass& renderPass,
                                const VulkanFramebuffers& framebuffers,
-                               const VulkanPipeline& pipeline, const VulkanCommandPool& commandPool)
-                                 :m_SwapchainRef(swapchain), m_FramebuffersRef(framebuffers)
+                               const VulkanCommandPool& commandPool,
+                               Sky::RHI::Device::Impl& impl)
+                                 : m_SwapchainRef(swapchain), m_FramebuffersRef(framebuffers)
 {
   m_Device = device.handle();
   m_GraphicsQueue = device.graphicQueue();
   m_Swapchain = swapchain.handle();
   m_RenderPass = renderPass.handle();
-  m_Pipeline = pipeline.handle();
   m_CommandBuffer = commandPool.allocatePrimary();
+  m_DeviceImpl = &impl;
 
   VkSemaphoreCreateInfo semInfo{};
   semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -95,8 +99,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageInde
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-  SKY_RHI_VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo),
-               "Failed to begin command buffer");
+  SKY_RHI_VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin command buffer");
 
   VkClearValue clearColor{};
   clearColor.color = {{ 0.0f, 0.0f, 0.05f, 1.0f }};
@@ -111,23 +114,18 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageInde
   renderPassInfo.pClearValues = &clearColor;
 
   vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
 
-  VkViewport viewport{};
-  viewport.x = 0.0f;
-  viewport.y = 0.0f;
-  viewport.width = static_cast<float>(m_SwapchainRef.extent().width);
-  viewport.height = static_cast<float>(m_SwapchainRef.extent().height);
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-  VkRect2D scissor{};
-  scissor.offset = { 0, 0 };
-  scissor.extent = m_SwapchainRef.extent();
-  vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-  vkCmdDraw(cmd, 3, 1, 0, 0);
+  {
+    Sky::RHI::CommandList commandList = m_DeviceImpl->createCommandList(cmd);
+    commandList.bindPipeline(m_DeviceImpl->trianglePipelineHandle);
+    commandList.setViewport(0.0f, 0.0f,
+                            static_cast<float>(m_SwapchainRef.extent().width),
+                            static_cast<float>(m_SwapchainRef.extent().height));
+    commandList.setScissor(0, 0,
+                           m_SwapchainRef.extent().width,
+                           m_SwapchainRef.extent().height);
+    commandList.draw(3);
+  }
 
   vkCmdEndRenderPass(cmd);
 

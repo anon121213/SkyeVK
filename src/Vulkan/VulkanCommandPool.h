@@ -1,5 +1,4 @@
 #pragma once
-#include "VulkanDevice.h"
 
 class VulkanDevice;
 
