@@ -19,12 +19,29 @@
 namespace Sky::RHI
 {
 
+struct VulkanSwapchainEntry
+{
+  VulkanSurface surface;
+  VulkanSwapchain swapchain;
+
+  VulkanSwapchainEntry(const VulkanInstance& instance,
+    const VulkanDevice& device,
+    const SurfaceFactory& factory,
+    const uint32_t width,
+    const uint32_t height)
+      : surface(instance, factory)
+      , swapchain(device, surface, width, height) {}
+};
+
 struct Device::Impl
 {
   VulkanInstance      instance;
-  VulkanSurface       surface;
   VulkanDevice        device;
-  VulkanSwapchain     swapchain;
+
+  HandleAllocator<SwapchainHandle, VulkanSwapchainEntry> swapchainPool;
+  SwapchainHandle defaultSwapchainHandle;
+  VulkanSwapchainEntry* defaultEntry = nullptr;
+
   VulkanRenderPass    renderPass;
   VulkanFramebuffers  framebuffers;
   VulkanShaderModule  vertShader;

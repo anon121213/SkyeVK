@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Handle.h"
+#include "Swapchain.h"
 #include "Types.h"
 
 #include <functional>
@@ -9,8 +11,6 @@
 
 namespace Sky::RHI
 {
-
-using SurfaceFactoryFn = std::function<void*(void* backendInstance)>;
 
 struct DeviceCreateInfo
 {
@@ -40,6 +40,11 @@ public:
 
   void drawFrame();
   void waitIdle() const;
+
+  [[nodiscard]] SwapchainHandle createSwapchain(const SwapchainCreateInfo& info);
+  void destroySwapchain(SwapchainHandle handle) noexcept;
+  [[nodiscard]] SwapchainHandle defaultSwapchain() const noexcept;
+
 
   struct Impl;
 
