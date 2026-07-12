@@ -26,6 +26,14 @@ FetchContent_Declare(
 set(SPDLOG_USE_STD_FORMAT ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(spdlog)
 
+FetchContent_Declare(
+        volk
+        GIT_REPOSITORY https://github.com/zeux/volk.git
+        GIT_TAG        vulkan-sdk-1.4.350.0
+        GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(volk)
+
 add_library(SkyRenderer STATIC
         src/Core/Log.cpp
         src/Vulkan/VulkanInstance.cpp
@@ -60,6 +68,12 @@ target_link_libraries(SkyRenderer PUBLIC
         Vulkan::Vulkan
         GPUOpen::VulkanMemoryAllocator
         spdlog::spdlog
+        volk
+)
+
+target_compile_definitions(SkyRenderer PRIVATE
+        VMA_STATIC_VULKAN_FUNCTIONS=0
+        VMA_DYNAMIC_VULKAN_FUNCTIONS=1
 )
 
 target_precompile_headers(SkyRenderer PRIVATE src/skypch.h)

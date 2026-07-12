@@ -61,6 +61,7 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance)
 
   std::vector<const char*> extensionNames;
   extensionNames.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  extensionNames.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 
   for (const auto& device_extension : deviceExtensions)
   {
@@ -72,24 +73,50 @@ VulkanDevice::VulkanDevice(const VulkanInstance& instance)
 
   VkPhysicalDeviceFeatures features{};
 
+  VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
+  dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+  dynamicRenderingFeature.dynamicRendering = VK_TRUE;
+
   VkDeviceCreateInfo deviceCreateInfo = {};
   deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   deviceCreateInfo.queueCreateInfoCount = 1;
   deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
-  deviceCreateInfo.pNext = nullptr;
+  deviceCreateInfo.pNext = &dynamicRenderingFeature;
   deviceCreateInfo.pEnabledFeatures = &features;
   deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extensionNames.size());
   deviceCreateInfo.ppEnabledExtensionNames = extensionNames.data();
   deviceCreateInfo.enabledLayerCount = 0;
 
+  VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingQuery{};
+  dynamicRenderingQuery.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+
+  VkPhysicalDeviceFeatures2 features2{};
+  features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  features2.pNext = &dynamicRenderingQuery;
+
+  vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
+
+  if (!dynamicRenderingQuery.dynamicRendering)
+  {
+    SKY_RHI_ERROR("Dynamic rendering not supported by physical device");
+    throw std::runtime_error("Dynamic rendering not supported");
+  }
+
   SKY_RHI_VK_CHECK(vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device),
                "Failed to create logical device");
+
+  volkLoadDevice(m_Device);
+
+  VmaVulkanFunctions vulkanFunctions{};
+  vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+  vulkanFunctions.vkGetDeviceProcAddr   = vkGetDeviceProcAddr;
 
   VmaAllocatorCreateInfo allocatorInfo{};
   allocatorInfo.physicalDevice   = m_PhysicalDevice;
   allocatorInfo.device           = m_Device;
   allocatorInfo.instance         = instance.handle();
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+  allocatorInfo.pVulkanFunctions = &vulkanFunctions;
 
   SKY_RHI_VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_Allocator),
                "Failed to create VMA allocator");

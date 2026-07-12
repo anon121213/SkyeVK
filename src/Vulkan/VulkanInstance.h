@@ -7,8 +7,10 @@
 class VulkanInstance
 {
 public:
-  explicit VulkanInstance(const std::string& appName = "SkyRenderer", const std::string& engineName = "SkyGraphicEngine",
-                 const std::vector<const char*>& requiredExtensions = {});
+  explicit VulkanInstance(const std::string& appName = "SkyRenderer",
+                          const std::string& engineName = "SkyGraphicEngine",
+                          const std::vector<const char*>& requiredExtensions = {},
+                          bool enableValidation = false);
   ~VulkanInstance();
 
   VulkanInstance(const VulkanInstance &) = delete;
@@ -18,5 +20,6 @@ public:
 
 private:
   VkInstance m_Instance = VK_NULL_HANDLE;
+  VkDebugUtilsMessengerEXT m_DebugMessenger = VK_NULL_HANDLE;
 };
 

@@ -2,10 +2,10 @@
 
 #include "VulkanDevice.h"
 #include "VulkanPipeline.h"
-#include "VulkanRenderPass.h"
 #include "VulkanShaderModule.h"
 
-VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanRenderPass& renderPass,
+VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
+                               VkFormat colorFormat,
                                const VulkanShaderModule& vertexShader,
                                const VulkanShaderModule& fragmentShader)
 {
@@ -88,6 +88,11 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanRenderPas
   SKY_RHI_VK_CHECK(vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_Layout),
                "Failed to create pipeline layout");
 
+  VkPipelineRenderingCreateInfoKHR renderingInfo{};
+  renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+  renderingInfo.colorAttachmentCount = 1;
+  renderingInfo.pColorAttachmentFormats = &colorFormat;
+
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
@@ -101,10 +106,11 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanRenderPas
   pipelineInfo.pColorBlendState = &colorBlending;
   pipelineInfo.pDynamicState = &dynamicState;
   pipelineInfo.layout = m_Layout;
-  pipelineInfo.renderPass = renderPass.handle();
+  pipelineInfo.renderPass = VK_NULL_HANDLE;
   pipelineInfo.subpass = 0;
   pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
   pipelineInfo.basePipelineIndex = -1;
+  pipelineInfo.pNext = &renderingInfo;
 
   SKY_RHI_VK_CHECK(vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline),
                "Failed to create graphics pipeline");

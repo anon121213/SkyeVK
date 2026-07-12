@@ -1,6 +1,6 @@
 #pragma once
 
-// C++ stdlib — тяжёлые headers которые нужны почти везде
+// C++ stdlib
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -15,9 +15,9 @@
 #include <vector>
 
 // Vulkan
-#include <vulkan/vulkan.h>
+#include <volk.h>
 
-// spdlog (тяжёлый с fmt)
+// Log
 #include <spdlog/spdlog.h>
 
 // Our core infrastructure

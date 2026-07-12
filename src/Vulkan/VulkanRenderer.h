@@ -34,7 +34,7 @@ private:
   VkRenderPass m_RenderPass = VK_NULL_HANDLE;
 
   VkSemaphore m_ImageAvailable = VK_NULL_HANDLE;
-  VkSemaphore m_RenderFinished = VK_NULL_HANDLE;
+  std::vector<VkSemaphore> m_RenderFinished;
   VkFence m_InFlight = VK_NULL_HANDLE;
 
   VkCommandBuffer m_CommandBuffer = VK_NULL_HANDLE;

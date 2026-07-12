@@ -24,14 +24,19 @@ VulkanRenderer::VulkanRenderer(const VulkanDevice& device,
   m_RenderPass = renderPass.handle();
   m_CommandBuffer = commandPool.allocatePrimary();
   m_DeviceImpl = &impl;
+  m_RenderFinished.resize(swapchain.images().size());
+
+
 
   VkSemaphoreCreateInfo semInfo{};
   semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
   SKY_RHI_VK_CHECK(vkCreateSemaphore(m_Device, &semInfo, nullptr, &m_ImageAvailable),
                "Failed to create imageAvailable semaphore");
-  SKY_RHI_VK_CHECK(vkCreateSemaphore(m_Device, &semInfo, nullptr, &m_RenderFinished),
-               "Failed to create renderFinished semaphore");
+
+  for (auto& sem : m_RenderFinished)
+    SKY_RHI_VK_CHECK(vkCreateSemaphore(m_Device, &semInfo, nullptr, &sem),
+                     "Failed to create renderFinished semaphore");
 
   VkFenceCreateInfo fenceInfo{};
   fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -46,7 +51,10 @@ VulkanRenderer::VulkanRenderer(const VulkanDevice& device,
 VulkanRenderer::~VulkanRenderer() noexcept
 {
   vkDestroyFence(m_Device, m_InFlight, nullptr);
-  vkDestroySemaphore(m_Device, m_RenderFinished, nullptr);
+
+  for (const auto sem : m_RenderFinished)
+    vkDestroySemaphore(m_Device, sem, nullptr);
+
   vkDestroySemaphore(m_Device, m_ImageAvailable, nullptr);
 }
 
@@ -63,7 +71,7 @@ void VulkanRenderer::drawFrame()
 
   VkSemaphore waitSemaphores[] = { m_ImageAvailable };
   VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-  VkSemaphore signalSemaphores[] = { m_RenderFinished };
+  VkSemaphore signalSemaphores[] = { m_RenderFinished[imageIndex] };
 
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -101,19 +109,43 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageInde
 
   SKY_RHI_VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin command buffer");
 
-  VkClearValue clearColor{};
-  clearColor.color = {{ 0.0f, 0.0f, 0.05f, 1.0f }};
+  const VkImage image = m_SwapchainRef.images()[imageIndex];
+  const VkImageView imageView = m_SwapchainRef.imageViews()[imageIndex];
+  const VkExtent2D extent = m_SwapchainRef.extent();
 
-  VkRenderPassBeginInfo renderPassInfo{};
-  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  renderPassInfo.renderPass = m_RenderPass;
-  renderPassInfo.framebuffer = m_FramebuffersRef.handles()[imageIndex];
-  renderPassInfo.renderArea.offset = { 0, 0 };
-  renderPassInfo.renderArea.extent = m_SwapchainRef.extent();
-  renderPassInfo.clearValueCount = 1;
-  renderPassInfo.pClearValues = &clearColor;
+  VkImageMemoryBarrier toColor{};
+  toColor.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  toColor.srcAccessMask = 0;
+  toColor.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  toColor.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  toColor.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  toColor.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  toColor.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  toColor.image = image;
+  toColor.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
 
-  vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+  vkCmdPipelineBarrier(cmd,
+  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    0, 0, nullptr, 0, nullptr, 1, &toColor);
+
+  VkRenderingAttachmentInfoKHR colorAttachment{};
+  colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+  colorAttachment.imageView = imageView;
+  colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  colorAttachment.clearValue.color = {{ 0.0f, 0.0f, 0.05f, 1.0f }};
+
+  VkRenderingInfoKHR renderingInfo{};
+  renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+  renderingInfo.renderArea.offset = { 0, 0 };
+  renderingInfo.renderArea.extent = extent;
+  renderingInfo.layerCount = 1;
+  renderingInfo.colorAttachmentCount = 1;
+  renderingInfo.pColorAttachments = &colorAttachment;
+
+  vkCmdBeginRenderingKHR(cmd, &renderingInfo);
 
   {
     Sky::RHI::CommandList commandList = m_DeviceImpl->createCommandList(cmd);
@@ -127,7 +159,23 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageInde
     commandList.draw(3);
   }
 
-  vkCmdEndRenderPass(cmd);
+  vkCmdEndRenderingKHR(cmd);
+
+  VkImageMemoryBarrier toPresent{};
+  toPresent.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  toPresent.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  toPresent.dstAccessMask = 0;
+  toPresent.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  toPresent.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  toPresent.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  toPresent.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  toPresent.image = image;
+  toPresent.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+  vkCmdPipelineBarrier(cmd,
+  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    0, 0, nullptr, 0, nullptr, 1, &toPresent);
 
   SKY_RHI_VK_CHECK(vkEndCommandBuffer(cmd),
                "Failed to end command buffer");

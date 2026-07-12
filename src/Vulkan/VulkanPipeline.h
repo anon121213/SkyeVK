@@ -3,14 +3,13 @@
 #include <vulkan/vulkan.h>
 
 class VulkanShaderModule;
-class VulkanRenderPass;
 class VulkanDevice;
 
 class VulkanPipeline
 {
 public:
   VulkanPipeline(const VulkanDevice& device,
-    const VulkanRenderPass& renderPass,
+    VkFormat colorFormat,
     const VulkanShaderModule& vertexShader,
     const VulkanShaderModule& fragmentShader);
   ~VulkanPipeline() noexcept;

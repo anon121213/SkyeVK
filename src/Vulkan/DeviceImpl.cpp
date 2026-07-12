@@ -22,7 +22,7 @@ namespace Sky::RHI
 {
 
 Device::Impl::Impl(const DeviceCreateInfo& info)
-  : instance(info.appName, info.engineName, info.requiredInstanceExtensions)
+  : instance(info.appName, info.engineName, info.requiredInstanceExtensions, info.enableValidation)
   , device(instance)
   , defaultSwapchainHandle(swapchainPool.allocate(
     makeSwapchainEntry(instance, device, info.surfaceFactory,
@@ -33,7 +33,7 @@ Device::Impl::Impl(const DeviceCreateInfo& info)
   , vertShader(device, info.vertShaderPath)
   , fragShader(device, info.fragShaderPath)
   , trianglePipelineHandle(pipelinePool.allocate(
-    std::make_unique<VulkanPipeline>(device, renderPass, vertShader, fragShader)))
+    std::make_unique<VulkanPipeline>(device, defaultEntry->swapchain.imageFormat(), vertShader, fragShader)))
   , commandPool(device)
   , renderer(device, defaultEntry->swapchain, renderPass, framebuffers, commandPool, *this)
 {
