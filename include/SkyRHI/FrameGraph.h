@@ -7,8 +7,6 @@
 #include <cstdint>
 #include <memory>
 #include <functional>
-#include <string>
-#include <vector>
 
 namespace Sky::RHI
 {
@@ -23,6 +21,12 @@ struct FGTextureDesc
   Format format = Format::Undefined;
   uint32_t width = 0;
   uint32_t height = 0;
+};
+
+enum class FGAttachmentType : uint32_t
+{
+  Color,
+  Depth,
 };
 
 class FGResources
@@ -43,6 +47,12 @@ public:
 
 private:
   friend class FrameGraph;
+
+  PassBuilder(FrameGraph& graph, uint32_t passIndex) noexcept
+    : m_Graph(&graph), m_PassIndex(passIndex) {}
+
+  FrameGraph*  m_Graph    = nullptr;
+  uint32_t    m_PassIndex = 0;
 };
 
 class Device;
@@ -61,10 +71,12 @@ public:
     const std::function<void(PassBuilder&, PassData&)>& setup,
     std::function<void(const PassData&, FGResources&, CommandList&)> execute)
   {
+    const uint32_t passIndex = beginPass(name);
+
     auto data = std::make_unique<PassData>();
     PassData* dataPtr = data.get();
 
-    PassBuilder builder;
+    PassBuilder builder(*this, passIndex);
     setup(builder, *dataPtr);
 
     auto erasedExecute = [dataPtr, exec = std::move(execute)]
@@ -73,10 +85,10 @@ public:
       exec(*dataPtr, res, cmd);
     };
 
-    addPassInternal(name, std::move(erasedExecute),
-                   std::unique_ptr<void, void(*)(void*)>(
-                            data.release(),
-                            [](void* p){delete static_cast<PassData*>(p); }));
+    finalizePass(passIndex, std::move(erasedExecute),
+             std::unique_ptr<void, void(*)(void*)>(
+                 data.release(),
+                 [](void* p){ delete static_cast<PassData*>(p); }));
 
     return *dataPtr;
   }
@@ -85,6 +97,8 @@ public:
   void execute(CommandList& cmd);
 
 private:
+  friend class PassBuilder;
+
   struct Pass;
   struct Impl;
   std::unique_ptr<Impl> m_Impl;
@@ -92,7 +106,14 @@ private:
   using ErasedExecuteFn = std::function<void(FGResources&, CommandList&)>;
   using ErasedData = std::unique_ptr<void, void(*)(void*)>;
 
-  void addPassInternal(const char* name, ErasedExecuteFn execute, ErasedData data);
+  uint32_t beginPass(const char* name);
+  void finalizePass(uint32_t passIndex, ErasedExecuteFn execute, ErasedData data);
+
+  FGResource registerImportedSwapchain(SwapchainHandle swapchainHandle);
+  FGResource registerTransientTexture(const char* name, const FGTextureDesc& desc);
+
+  void recordRead(uint32_t passIndex, FGResource resource);
+  void recordWrite(uint32_t passIndex, FGResource resource, FGAttachmentType type);
 };
 
 }
