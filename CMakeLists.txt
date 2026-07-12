@@ -41,12 +41,9 @@ add_library(SkyRenderer STATIC
         src/Vulkan/VulkanSurface.cpp
         src/Vulkan/VMAImplementation.cpp
         src/Vulkan/VulkanSwapchain.cpp
-        src/Vulkan/VulkanRenderPass.cpp
-        src/Vulkan/VulkanFramebuffers.cpp
         src/Vulkan/VulkanShaderModule.cpp
         src/Vulkan/VulkanPipeline.cpp
         src/Vulkan/VulkanCommandPool.cpp
-        src/Vulkan/VulkanRenderer.cpp
         src/Vulkan/DeviceImpl.cpp
         include/SkyRHI/Handle.h
         include/SkyRHI/Device.h

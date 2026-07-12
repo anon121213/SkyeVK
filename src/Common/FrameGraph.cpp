@@ -1,6 +1,8 @@
 #include "skypch.h"
 #include "SkyRHI/FrameGraph.h"
+#include "Vulkan/DeviceImpl.h"
 
+#include <sys/stat.h>
 #include <unistd.h>
 
 namespace { std::unique_ptr<void, void(*)(void*)> makeEmptyData() { return { nullptr, [](void*){} }; } }
@@ -170,9 +172,94 @@ void FrameGraph::compile()
 
 void FrameGraph::execute(CommandList& cmd)
 {
+  auto vkCmd = static_cast<VkCommandBuffer>(cmd.m_NativeCmd);
+  auto* impl = static_cast<Device::Impl*>(cmd.m_DeviceImpl);
+
+  auto transition = [&](VkImage img, VkImageLayout& current, VkImageLayout target,
+                     VkAccessFlags srcAccess, VkAccessFlags dstAccess,
+                     VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage)
+  {
+    VkImageMemoryBarrier b{};
+    b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    b.srcAccessMask = srcAccess;
+    b.dstAccessMask = dstAccess;
+    b.oldLayout = current;
+    b.newLayout = target;
+    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = img;
+    b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    vkCmdPipelineBarrier(vkCmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &b);
+    current = target;   // ← обновляем tracked layout
+  };
+
+  std::vector<VkImageLayout> layouts(m_Impl->resources.size(), VK_IMAGE_LAYOUT_UNDEFINED);
   FGResources resources;
+
   for (const uint32_t passIndex : m_Impl->executionOrder)
-    m_Impl->passes[passIndex].execute(resources, cmd);
+  {
+    auto& pass = m_Impl->passes[passIndex];
+
+    std::vector<VkRenderingAttachmentInfoKHR> colorAttachments;
+    VkExtent2D extent{};
+
+    for (auto& write : pass.writes)
+    {
+      if (write.type != FGAttachmentType::Color)
+        continue;
+
+      FGResourceEntry& entry = m_Impl->resources[write.resource.index];
+      VulkanSwapchainEntry* sw = impl->swapchainPool.resolve(entry.importedSwapchain);
+      const VkImage image = sw->swapchain.images()[impl->currentImageIndex];
+      const VkImageView view = sw->swapchain.imageViews()[impl->currentImageIndex];
+      extent = sw->swapchain.extent();
+
+      transition(image, layouts[write.resource.index],
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+      VkRenderingAttachmentInfoKHR att{};
+      att.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+      att.imageView = view;
+      att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      att.clearValue.color = {{ 0.0f, 0.0f, 0.05f, 1.0f }};
+
+      colorAttachments.push_back(att);
+    }
+
+    VkRenderingInfoKHR ri{};
+    ri.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    ri.renderArea.offset = { 0, 0 };
+    ri.renderArea.extent = extent;
+    ri.layerCount = 1;
+    ri.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
+    ri.pColorAttachments = colorAttachments.data();
+
+    vkCmdBeginRenderingKHR(vkCmd, &ri);
+
+    CommandList passCmd = impl->createCommandList(vkCmd);
+    pass.execute(resources, passCmd);
+
+    vkCmdEndRenderingKHR(vkCmd);
+  }
+
+  for (uint32_t r = 0; r < m_Impl->resources.size(); ++r)
+  {
+    if (!m_Impl->resources[r].imported)
+      continue;
+
+    VulkanSwapchainEntry* sw = impl->swapchainPool.resolve(m_Impl->resources[r].importedSwapchain);
+    const VkImage image = sw->swapchain.images()[impl->currentImageIndex];
+
+    transition(image, layouts[r], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+  }
 }
 
 uint32_t FrameGraph::beginPass(const char* name)
