@@ -29,6 +29,7 @@ public:
             uint32_t instanceCount = 1,
             uint32_t firstVertex = 0,
             uint32_t firstInstance = 0) noexcept;
+  void bindVertexBuffer(BufferHandle buffer) noexcept;
 
 private:
   friend class Device;

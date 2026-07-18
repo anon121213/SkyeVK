@@ -99,21 +99,34 @@ Sky::RHI::BufferHandle vb = device.createBuffer({...});   // POD, uint64_t
 - Consumer main.cpp — 40 строк, без VulkanX includes
 - Треугольник продолжает работать
 
-**Phase 1 (Frame Graph MVP) — NEXT 🚧**
+**Phase 1 (Frame Graph MVP) — DONE ✅ (2026-07-13)**
+- `include/SkyRHI/CommandList.h` — recording API (setViewport/setScissor/bindPipeline/draw), void* opaque backend, private ctor через friend
+- `include/SkyRHI/Swapchain.h` — public handle-based, composite VulkanSwapchainEntry в pool
+- `include/SkyRHI/FrameGraph.h` + `src/Common/FrameGraph.cpp` — **Variant A (templated PassData, Frostbite/UE RDG-style)**, type erasure через graph-owned PassData
+- FrameGraph compiler: DAG + refcount culling + Kahn's topo sort
+- FrameGraph execute: resource realization (imported swapchain → backbuffer), layout tracking, автоматические vkCmdPipelineBarrier, dynamic rendering per pass
+- **src/Common/HandleAllocator.h** — thread-safe pool, generation counter (32:32 packed uint64_t)
+- **Dynamic rendering** (не VkRenderPass) — VK_KHR_dynamic_rendering, VkPipelineRenderingCreateInfoKHR, explicit barriers
+- **volk** meta-loader — все extension-функции runtime-loaded (`#include <volk.h>`, VK_NO_PROTOTYPES)
+- **Validation layers** — VK_LAYER_KHRONOS_validation + debug messenger в VulkanInstance
+- Frame lifecycle в Device::Impl (beginFrame/endFrame). VulkanRenderer/RenderPass/Framebuffers **удалены**
+- Треугольник рендерится через настоящий FG, validation чистая
+
+**Phase 2 (Buffers + Cube) — NEXT 🚧**
 Задачи:
-1. `include/SkyRHI/CommandList.h` — recording API
-2. `include/SkyRHI/Swapchain.h` — public handle-based (сейчас внутри Device)
-3. `include/SkyRHI/FrameGraph.h` — pass declaration API
-4. `src/Common/FrameGraphCompiler.cpp` — DAG анализ
-5. Автоматические `vkCmdPipelineBarrier` между passes
-6. Треугольник через FG (один RasterPass)
-7. Тесты корректности FG
+1. Public buffer creation API (`Device::createBuffer` → BufferHandle через VMA)
+2. Vertex/index buffers, `CommandList::bindVertexBuffer/bindIndexBuffer/drawIndexed`
+3. Public pipeline creation (`GraphicsPipelineDesc` — vertex layout, blend, depth, raster state)
+4. MVP матрицы (push constants или uniform buffer), камера
+5. Куб вместо треугольника
+6. Убрать временные хаки: shader paths из DeviceCreateInfo, hardcoded triangle pipeline, FG строится внутри drawFrame → consumer-driven
 
-**Треугольник должен продолжать работать после каждой фазы.**
+**Треугольник/куб должен продолжать работать после каждой фазы.**
 
-**Open questions для Phase 1 старта:**
-- `Sky::RHI::Log::init()` теперь private — как consumer управляет логгированием? Auto-init в Device / public entry point.
-- Shader paths хак в `DeviceCreateInfo` — при Phase 1 уйдёт (FG exposes pipeline creation).
+**Временные хаки Phase 1 (убрать в Phase 2):**
+- Triangle pipeline хардкожен в Device::Impl, shader paths в DeviceCreateInfo
+- FG строится внутри Device::drawFrame (не consumer-driven) — до public pipeline creation
+- FGResources::getTexture — stub; realization только imported swapchain (transient VkImage — Phase 2+ через VMA)
 
 ## Ключевые файлы
 

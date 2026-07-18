@@ -192,12 +192,55 @@ void Device::Impl::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex)
       0, 0, nullptr, 0, nullptr, 1, &toPresent);
 }
 
+void Device::Impl::immediateSubmit(const std::function<void(VkCommandBuffer)>& record)
+{
+  VkCommandBuffer cmd = commandPool.allocatePrimary();
+
+  VkCommandBufferBeginInfo begin{};
+  begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(cmd, &begin);
+
+  record(cmd);
+
+  vkEndCommandBuffer(cmd);
+
+  VkSubmitInfo submit{};
+  submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit.commandBufferCount = 1;
+  submit.pCommandBuffers = &cmd;
+
+  SKY_RHI_VK_CHECK(vkQueueSubmit(device.graphicQueue(), 1, &submit, VK_NULL_HANDLE),
+    "Immediate submit failed");
+
+  vkQueueWaitIdle(device.graphicQueue());
+
+  commandPool.free(cmd);
+}
+
 void Device::Impl::waitIdle() const
 {
   vkDeviceWaitIdle(device.handle());
 }
 
-Device::Device(const DeviceCreateInfo& info): m_Impl(std::make_unique<Impl>(info)) {}
+Device::Device(const DeviceCreateInfo& info) :
+  m_Impl(std::make_unique<Impl>(info))
+{
+  const float verts[]
+  {
+    0.0f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   // top    — red
+     0.5f,  0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   // right  — green
+    -0.5f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f,  // left   — blue
+  };
+
+  m_Impl->triangleVertexBuffer = createBuffer({sizeof(verts),
+    BufferUsage::Vertex | BufferUsage::TransferDst,
+    MemoryType::GpuOnly});
+
+  uploadBufferData(m_Impl->triangleVertexBuffer, verts, sizeof(verts));
+}
+
 Device::~Device() noexcept = default;
 
 void Device::drawFrame()
@@ -213,6 +256,7 @@ void Device::drawFrame()
     [&](const TriData&, FGResources&, CommandList& cmd){
       const auto extent = m_Impl->defaultEntry->swapchain.extent();
       cmd.bindPipeline(m_Impl->trianglePipelineHandle);
+      cmd.bindVertexBuffer(m_Impl->triangleVertexBuffer);
       cmd.setViewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
       cmd.setScissor(0, 0, extent.width, extent.height);
       cmd.draw(3);
@@ -245,4 +289,50 @@ SwapchainHandle Device::defaultSwapchain() const noexcept
   return m_Impl->defaultSwapchainHandle;
 }
 
+BufferHandle Device::createBuffer(const BufferDesc& desc)
+{
+  return m_Impl->bufferPool.allocate(std::make_unique<VulkanBuffer>(m_Impl->device.allocator(), desc));
 }
+
+void Device::destroyBuffer(BufferHandle handle) noexcept
+{
+  m_Impl->bufferPool.deallocate(handle);
+}
+
+void* Device::mapBuffer(BufferHandle handle)
+{
+  VulkanBuffer* buf = m_Impl->bufferPool.resolve(handle);
+  return buf ? buf->map() : nullptr;
+}
+
+void Device::unmapBuffer(BufferHandle handle)
+{
+  if (VulkanBuffer* buf = m_Impl->bufferPool.resolve(handle))
+    buf->unmap();
+}
+
+void Device::uploadBufferData(BufferHandle handle, const void* data, uint64_t size)
+{
+  VulkanBuffer* dst = m_Impl->bufferPool.resolve(handle);
+  if (!dst)
+  {
+    SKY_RHI_WARN("uploadBufferData: invalid buffer handle");
+    return;
+  }
+
+  VulkanBuffer staging(m_Impl->device.allocator(),
+    {size, BufferUsage::TransferSrc, MemoryType::CpuOnly});
+
+  SKY_RHI_VK_CHECK(vmaCopyMemoryToAllocation(m_Impl->device.allocator(), data,
+    staging.allocation(), 0, size),
+    "Failed to copy data to staging buffer");
+
+  m_Impl->immediateSubmit([&](VkCommandBuffer cmd)
+  {
+    VkBufferCopy region{};
+    region.size = size;
+    vkCmdCopyBuffer(cmd, staging.handle(), dst->handle(), 1, &region);
+  });
+}
+
+} // namespace Sky::RHI

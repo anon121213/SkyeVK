@@ -37,3 +37,7 @@ VkCommandBuffer VulkanCommandPool::allocatePrimary() const
 
   return cmd;
 }
+void VulkanCommandPool::free(VkCommandBuffer cmd) const
+{
+  vkFreeCommandBuffers(m_Device, m_Pool, 1, &cmd);
+}

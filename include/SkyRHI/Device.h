@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Buffer.h"
 #include "Handle.h"
 #include "Swapchain.h"
 #include "Types.h"
@@ -45,6 +46,13 @@ public:
   void destroySwapchain(SwapchainHandle handle) noexcept;
   [[nodiscard]] SwapchainHandle defaultSwapchain() const noexcept;
 
+  [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc);
+  void destroyBuffer(BufferHandle handle) noexcept;
+
+  [[nodiscard]] void* mapBuffer(BufferHandle handle);
+  void unmapBuffer(BufferHandle handle);
+
+  void uploadBufferData(BufferHandle handle, const void* data, uint64_t size);
 
   struct Impl;
 

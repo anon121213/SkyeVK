@@ -2,7 +2,6 @@
 #include "SkyRHI/FrameGraph.h"
 #include "Vulkan/DeviceImpl.h"
 
-#include <sys/stat.h>
 #include <unistd.h>
 
 namespace { std::unique_ptr<void, void(*)(void*)> makeEmptyData() { return { nullptr, [](void*){} }; } }

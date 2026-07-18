@@ -49,5 +49,20 @@ void CommandList::draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t fi
   vkCmdDraw(static_cast<VkCommandBuffer>(m_NativeCmd), vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
+void CommandList::bindVertexBuffer(BufferHandle buffer) noexcept
+{
+  auto* impl = static_cast<Device::Impl*>(m_DeviceImpl);
+  VulkanBuffer* buf = impl->bufferPool.resolve(buffer);
+  if (!buf)
+  {
+    SKY_RHI_WARN("bindVertexBuffer: invalid buffer handle (id={})", buffer.id);
+    return;
+  }
+
+  VkBuffer vkBuf = buf->handle();
+  VkDeviceSize offest = 0;
+  vkCmdBindVertexBuffers(static_cast<VkCommandBuffer>(m_NativeCmd), 0, 1, &vkBuf, &offest);
+}
+
 }
 

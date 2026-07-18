@@ -54,6 +54,9 @@ add_library(SkyRenderer STATIC
         include/SkyRHI/Swapchain.h
         include/SkyRHI/FrameGraph.h
         src/Common/FrameGraph.cpp
+        include/SkyRHI/Buffer.h
+        src/Vulkan/VulkanBuffer.h
+        src/Vulkan/VulkanBuffer.cpp
 )
 
 target_include_directories(SkyRenderer

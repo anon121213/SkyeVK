@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SkyRHI/Device.h"
+#include "VulkanBuffer.h"
 
 #include "Common/HandleAllocator.h"
 
@@ -47,12 +48,15 @@ struct Device::Impl
 
   VulkanCommandPool   commandPool;
 
-  // Frame lifecycle (moved from the removed VulkanRenderer).
   VkCommandBuffer          commandBuffer  = VK_NULL_HANDLE;
   VkSemaphore              imageAvailable = VK_NULL_HANDLE;
   std::vector<VkSemaphore> renderFinished;   // one per swapchain image
   VkFence                  inFlight       = VK_NULL_HANDLE;
   uint32_t                 currentImageIndex = 0;   // Backbuffer acquired this frame (for FG realization)
+
+  HandleAllocator<BufferHandle, VulkanBuffer> bufferPool;
+
+  BufferHandle triangleVertexBuffer;
 
   [[nodiscard]] CommandList createCommandList(VkCommandBuffer cmd) noexcept
   {
@@ -65,6 +69,8 @@ struct Device::Impl
 
   // Temporary hardcoded triangle recording — replaced by FrameGraph::execute in 1e-final.
   void recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex);
+
+  void immediateSubmit(const std::function<void(VkCommandBuffer)>& record);
 
   explicit Impl(const DeviceCreateInfo& info);
   ~Impl();

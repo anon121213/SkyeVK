@@ -25,12 +25,25 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
 
   const std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = { vertStage, fragStage };
 
+  VkVertexInputBindingDescription binding{};
+  binding.binding = 0;
+  binding.stride = sizeof(float) * 6;
+  binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+  VkVertexInputAttributeDescription attrs[2]{};
+  attrs[0].location = 0; attrs[0].binding = 0;
+  attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+  attrs[0].offset = 0;
+  attrs[1].location = 1; attrs[1].binding = 0;
+  attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+  attrs[1].offset = sizeof(float) * 3;
+
   VkPipelineVertexInputStateCreateInfo vertexInput{};
   vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInput.vertexBindingDescriptionCount = 0;
-  vertexInput.pVertexBindingDescriptions = nullptr;
-  vertexInput.vertexAttributeDescriptionCount = 0;
-  vertexInput.pVertexAttributeDescriptions = nullptr;
+  vertexInput.vertexBindingDescriptionCount = 1;
+  vertexInput.pVertexBindingDescriptions = &binding;
+  vertexInput.vertexAttributeDescriptionCount = 2;
+  vertexInput.pVertexAttributeDescriptions = attrs;
 
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
   inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
