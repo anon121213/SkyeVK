@@ -96,6 +96,8 @@ void Device::Impl::beginFrame()
   vkWaitForFences(device.handle(), 1, &inFlight, VK_TRUE, UINT64_MAX);
   vkResetFences(device.handle(), 1, &inFlight);
 
+  frameTransients.clear();
+
   vkAcquireNextImageKHR(device.handle(), defaultEntry->swapchain.handle(), UINT64_MAX,
                         imageAvailable, VK_NULL_HANDLE, &currentImageIndex);
 

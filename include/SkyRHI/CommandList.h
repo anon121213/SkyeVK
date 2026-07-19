@@ -2,6 +2,7 @@
 
 #include "Device.h"
 #include "Handle.h"
+#include "Types.h"
 
 #include <cstdint>
 
@@ -30,6 +31,13 @@ public:
             uint32_t firstVertex = 0,
             uint32_t firstInstance = 0) noexcept;
   void bindVertexBuffer(BufferHandle buffer) noexcept;
+  void bindIndexBuffer(BufferHandle buffer, IndexType type) noexcept;
+  void drawIndexed(uint32_t indexCount,
+    uint32_t instanceCount = 1,
+    uint32_t firstIndex    = 0,
+    int32_t  vertexOffset  = 0,
+    uint32_t firstInstance = 0) noexcept;
+  void pushConstants(const void* data, uint32_t size) noexcept;
 
 private:
   friend class Device;
@@ -39,8 +47,9 @@ private:
   CommandList(void* nativeCmd, void* deviceImplPtr) noexcept
     : m_NativeCmd(nativeCmd), m_DeviceImpl(deviceImplPtr){}
 
-  void* m_NativeCmd = nullptr;
-  void* m_DeviceImpl = nullptr;
+  void* m_NativeCmd           = nullptr;
+  void* m_DeviceImpl          = nullptr;
+  void* m_BoundPipelineLayout = nullptr;
 };
 
 }

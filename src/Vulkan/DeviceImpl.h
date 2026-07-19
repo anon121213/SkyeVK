@@ -1,11 +1,9 @@
 #pragma once
 
-#include "SkyRHI/Device.h"
-#include "VulkanBuffer.h"
-
 #include "Common/HandleAllocator.h"
-
+#include "SkyRHI/Device.h"
 #include "SkyRHI/CommandList.h"
+#include "VulkanBuffer.h"
 #include "VulkanCommandPool.h"
 #include "VulkanDevice.h"
 #include "VulkanInstance.h"
@@ -13,6 +11,7 @@
 #include "VulkanShaderModule.h"
 #include "VulkanSurface.h"
 #include "VulkanSwapchain.h"
+#include "VulkanImage.h"
 
 namespace Sky::RHI
 {
@@ -53,6 +52,8 @@ struct Device::Impl
   HandleAllocator<BufferHandle, VulkanBuffer> bufferPool;
 
   HandleAllocator<ShaderHandle, VulkanShaderModule> shaderPool;
+
+  std::vector<std::unique_ptr<VulkanImage>> frameTransients;
 
   [[nodiscard]] CommandList createCommandList(VkCommandBuffer cmd) noexcept
   {

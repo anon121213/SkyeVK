@@ -39,6 +39,8 @@ void CommandList::bindPipeline(PipelineHandle pipeline) noexcept
     return;
   }
 
+  m_BoundPipelineLayout = vkPipeline->layout();
+
   vkCmdBindPipeline(static_cast<VkCommandBuffer>(m_NativeCmd),
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     vkPipeline->handle());
@@ -62,6 +64,38 @@ void CommandList::bindVertexBuffer(BufferHandle buffer) noexcept
   VkBuffer vkBuf = buf->handle();
   VkDeviceSize offest = 0;
   vkCmdBindVertexBuffers(static_cast<VkCommandBuffer>(m_NativeCmd), 0, 1, &vkBuf, &offest);
+}
+
+void CommandList::bindIndexBuffer(BufferHandle buffer, IndexType type) noexcept
+{
+  auto* impl = static_cast<Device::Impl*>(m_DeviceImpl);
+  VulkanBuffer* buf = impl->bufferPool.resolve(buffer);
+  if (!buf)
+  {
+    SKY_RHI_WARN("bindingIndexBuffer: invalid buffer handle (id={})", buffer.id);
+    return;
+  }
+
+  const VkIndexType vkType = (type == IndexType::UInt16) ? VK_INDEX_TYPE_UINT16
+                                                         : VK_INDEX_TYPE_UINT32;
+
+  vkCmdBindIndexBuffer(static_cast<VkCommandBuffer>(m_NativeCmd), buf->handle(), 0, vkType);
+}
+
+void CommandList::drawIndexed(const uint32_t indexCount, const uint32_t instanceCount,
+                              const uint32_t firstIndex, const int32_t vertexOffset,
+                              const uint32_t firstInstance) noexcept
+{
+  vkCmdDrawIndexed(static_cast<VkCommandBuffer>(m_NativeCmd),
+    indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void CommandList::pushConstants(const void* data, uint32_t size) noexcept
+{
+  vkCmdPushConstants(static_cast<VkCommandBuffer>(m_NativeCmd),
+                    static_cast<VkPipelineLayout>(m_BoundPipelineLayout),
+                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0, size, data);
 }
 
 }

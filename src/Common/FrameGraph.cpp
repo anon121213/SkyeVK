@@ -2,9 +2,28 @@
 #include "SkyRHI/FrameGraph.h"
 #include "Vulkan/DeviceImpl.h"
 
-#include <unistd.h>
+namespace
+{
+std::unique_ptr<void, void(*)(void*)> makeEmptyData() { return { nullptr, [](void*){} }; }
 
-namespace { std::unique_ptr<void, void(*)(void*)> makeEmptyData() { return { nullptr, [](void*){} }; } }
+VkFormat toVkFormat(Sky::RHI::Format f)
+{
+  using F = Sky::RHI::Format;
+  switch (f)
+  {
+  case F::RGB32_SFLOAT:  return VK_FORMAT_R32G32B32_SFLOAT;
+  case F::RGBA32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
+  case F::RG32_SFLOAT:   return VK_FORMAT_R32G32_SFLOAT;
+  case F::RGBA16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case F::BGRA8_SRGB:    return VK_FORMAT_B8G8R8A8_SRGB;
+  case F::RGBA8_SRGB:    return VK_FORMAT_R8G8B8A8_SRGB;
+  case F::RGBA8_UNORM:   return VK_FORMAT_R8G8B8A8_UNORM;
+  case F::D32_SFLOAT:    return VK_FORMAT_D32_SFLOAT;
+  default:               return VK_FORMAT_UNDEFINED;
+  }
+}
+
+}
 
 namespace Sky::RHI
 {
@@ -176,7 +195,8 @@ void FrameGraph::execute(CommandList& cmd)
 
   auto transition = [&](VkImage img, VkImageLayout& current, VkImageLayout target,
                      VkAccessFlags srcAccess, VkAccessFlags dstAccess,
-                     VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage)
+                     VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
+                     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT)
   {
     VkImageMemoryBarrier b{};
     b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -187,7 +207,7 @@ void FrameGraph::execute(CommandList& cmd)
     b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     b.image = img;
-    b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    b.subresourceRange = { aspect, 0, 1, 0, 1 };
     vkCmdPipelineBarrier(vkCmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &b);
     current = target;   // ← обновляем tracked layout
   };
@@ -198,6 +218,39 @@ void FrameGraph::execute(CommandList& cmd)
   for (const uint32_t passIndex : m_Impl->executionOrder)
   {
     auto& pass = m_Impl->passes[passIndex];
+
+    VkRenderingAttachmentInfoKHR depthAttachment{};
+    bool hasDepth = false;
+
+    for (auto& write : pass.writes)
+    {
+      if (write.type == FGAttachmentType::Depth)
+      {
+        FGResourceEntry& entry = m_Impl->resources[write.resource.index];
+
+        auto img = std::make_unique<VulkanImage>(
+          impl->device.allocator(), impl->device.handle(),
+          toVkFormat(entry.desc.format), entry.desc.width, entry.desc.height,
+          VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+        transition(img->handle(), layouts[write.resource.index],
+          VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+          0, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+          VK_IMAGE_ASPECT_DEPTH_BIT);
+
+        depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        depthAttachment.imageView = img->view();
+        depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
+
+        hasDepth = true;
+        impl->frameTransients.push_back(std::move(img));
+      }
+    }
 
     std::vector<VkRenderingAttachmentInfoKHR> colorAttachments;
     VkExtent2D extent{};
@@ -237,6 +290,7 @@ void FrameGraph::execute(CommandList& cmd)
     ri.layerCount = 1;
     ri.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
     ri.pColorAttachments = colorAttachments.data();
+    ri.pDepthAttachment = hasDepth ? &depthAttachment : nullptr;
 
     vkCmdBeginRenderingKHR(vkCmd, &ri);
 

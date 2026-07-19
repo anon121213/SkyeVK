@@ -123,10 +123,15 @@ Sky::RHI::BufferHandle vb = device.createBuffer({...});   // POD, uint64_t
 
 **Треугольник/куб должен продолжать работать после каждой фазы.**
 
-**Временные хаки Phase 1 (убрать в Phase 2):**
-- Triangle pipeline хардкожен в Device::Impl, shader paths в DeviceCreateInfo
-- FG строится внутри Device::drawFrame (не consumer-driven) — до public pipeline creation
-- FGResources::getTexture — stub; realization только imported swapchain (transient VkImage — Phase 2+ через VMA)
+**Phase 2 прогресс:**
+- ✅ Buffers через VMA (createBuffer, uploadBufferData via staging, mapBuffer)
+- ✅ Треугольник из vertex buffer (vertex input в pipeline)
+- ✅ **Path B DONE — все хаки Phase 1 удалены.** Public createShader/createGraphicsPipeline, consumer-driven rendering (beginFrame/endFrame/execute(FrameGraph&)). Consumer создаёт shaders/pipeline/VB и сам декларирует passes. Device ctor чистый.
+- 🚧 Дальше: index buffer + drawIndexed, depth (transient через FG), push constants + MVP + камера, куб.
+
+**Оставшиеся stub'ы (не хаки — отложенная функциональность):**
+- FGResources::getTexture — stub; realization только imported swapchain (transient VkImage — depth в Phase 2, textures в Phase 3)
+- FG execute обрабатывает только writes (reads/getTexture — Phase 3 с descriptors)
 
 ## Ключевые файлы
 

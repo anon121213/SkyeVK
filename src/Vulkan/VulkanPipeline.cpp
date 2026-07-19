@@ -100,6 +100,16 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
                                       | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   colorBlendAttachment.blendEnable = VK_FALSE;
 
+  VkPipelineDepthStencilStateCreateInfo depthStencil{};
+  depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.depthTestEnable = VK_TRUE;
+  depthStencil.depthWriteEnable = VK_TRUE;
+  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+  depthStencil.depthBoundsTestEnable = VK_FALSE;
+  depthStencil.stencilTestEnable = VK_FALSE;
+
+  const bool hasDepth = desc.depthFormat != Sky::RHI::Format::Undefined;
+
   VkPipelineColorBlendStateCreateInfo colorBlending{};
   colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   colorBlending.logicOpEnable = VK_FALSE;
@@ -116,22 +126,29 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
   dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
   dynamicState.pDynamicStates = dynamicStates.data();
 
+  VkPushConstantRange pcRange{};
+  pcRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  pcRange.offset = 0;
+  pcRange.size = desc.pushConstantSize;
+
   VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   pipelineLayoutInfo.setLayoutCount = 0;
   pipelineLayoutInfo.pSetLayouts = nullptr;
-  pipelineLayoutInfo.pushConstantRangeCount = 0;
-  pipelineLayoutInfo.pPushConstantRanges = nullptr;
+  pipelineLayoutInfo.pushConstantRangeCount = desc.pushConstantSize > 0 ? 1 : 0;
+  pipelineLayoutInfo.pPushConstantRanges = desc.pushConstantSize > 0 ? &pcRange : nullptr;
 
   SKY_RHI_VK_CHECK(vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_Layout),
                "Failed to create pipeline layout");
 
   VkFormat colorFmt = toVkFormat(desc.colorFormat);
+  VkFormat depthFmt = toVkFormat(desc.depthFormat);
 
   VkPipelineRenderingCreateInfoKHR renderingInfo{};
   renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
   renderingInfo.colorAttachmentCount = 1;
   renderingInfo.pColorAttachmentFormats = &colorFmt;
+  renderingInfo.depthAttachmentFormat = hasDepth ? depthFmt : VK_FORMAT_UNDEFINED;
 
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -144,6 +161,7 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pDepthStencilState = nullptr;
   pipelineInfo.pColorBlendState = &colorBlending;
+  pipelineInfo.pDepthStencilState = hasDepth ? &depthStencil : nullptr;
   pipelineInfo.pDynamicState = &dynamicState;
   pipelineInfo.layout = m_Layout;
   pipelineInfo.renderPass = VK_NULL_HANDLE;
@@ -156,12 +174,6 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
                "Failed to create graphics pipeline");
 
   SKY_RHI_INFO("Graphics pipeline created");
-
-
-
-
-
-
 }
 
 VulkanPipeline::~VulkanPipeline() noexcept

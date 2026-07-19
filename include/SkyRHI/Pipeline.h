@@ -23,9 +23,9 @@ struct GraphicsPipelineDesc
 
   uint32_t                     vertexStride = 0;                  // bytes per vertex (0 = no vertex input)
   std::vector<VertexAttribute> vertexAttributes;
-  Format                       colorFormat = Format::Undefined;  // color attachment format (dynamic rendering)
-  // Defaults (will be reworking): topology=TriangleList, cull=None, blend=off, depth=off.
-  // Добавим когда понадобится: depthFormat (Шаг 5), push constants (Шаг 6), blend, topology.
+  Format                       colorFormat = Format::Undefined;   // color attachment format (dynamic rendering)
+  Format                       depthFormat = Format::Undefined;
+  uint32_t                     pushConstantSize = 0;  // bytes of push constant data (0 = none)
 };
 
 }
