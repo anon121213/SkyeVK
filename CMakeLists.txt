@@ -57,6 +57,8 @@ add_library(SkyRenderer STATIC
         include/SkyRHI/Buffer.h
         src/Vulkan/VulkanBuffer.h
         src/Vulkan/VulkanBuffer.cpp
+        include/SkyRHI/Shader.h
+        include/SkyRHI/Pipeline.h
 )
 
 target_include_directories(SkyRenderer

@@ -40,11 +40,7 @@ struct Device::Impl
   SwapchainHandle       defaultSwapchainHandle;
   VulkanSwapchainEntry* defaultEntry = nullptr;
 
-  VulkanShaderModule  vertShader;
-  VulkanShaderModule  fragShader;
-
   HandleAllocator<PipelineHandle, VulkanPipeline> pipelinePool;
-  PipelineHandle      trianglePipelineHandle;
 
   VulkanCommandPool   commandPool;
 
@@ -56,7 +52,7 @@ struct Device::Impl
 
   HandleAllocator<BufferHandle, VulkanBuffer> bufferPool;
 
-  BufferHandle triangleVertexBuffer;
+  HandleAllocator<ShaderHandle, VulkanShaderModule> shaderPool;
 
   [[nodiscard]] CommandList createCommandList(VkCommandBuffer cmd) noexcept
   {
@@ -66,9 +62,6 @@ struct Device::Impl
   void beginFrame();   // wait fence, acquire -> currentImageIndex, begin command buffer
   void endFrame();     // end command buffer, submit, present
   void waitIdle() const;
-
-  // Temporary hardcoded triangle recording — replaced by FrameGraph::execute in 1e-final.
-  void recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex);
 
   void immediateSubmit(const std::function<void(VkCommandBuffer)>& record);
 

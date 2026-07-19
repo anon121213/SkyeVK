@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SkyRHI/Pipeline.h"
 #include <vulkan/vulkan.h>
 
 class VulkanShaderModule;
@@ -9,9 +10,8 @@ class VulkanPipeline
 {
 public:
   VulkanPipeline(const VulkanDevice& device,
-    VkFormat colorFormat,
-    const VulkanShaderModule& vertexShader,
-    const VulkanShaderModule& fragmentShader);
+                 const Sky::RHI::GraphicsPipelineDesc& desc,
+                 VkShaderModule vertexShader, VkShaderModule fragmentShader);
   ~VulkanPipeline() noexcept;
 
   VulkanPipeline(const VulkanPipeline&) = delete;

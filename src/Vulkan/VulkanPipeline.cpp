@@ -1,49 +1,74 @@
 #include "skypch.h"
 
+#include "SkyRHI/Types.h"
 #include "VulkanDevice.h"
 #include "VulkanPipeline.h"
 #include "VulkanShaderModule.h"
 
+namespace
+{
+
+VkFormat toVkFormat(Sky::RHI::Format f)
+{
+  using F = Sky::RHI::Format;
+  switch (f)
+  {
+  case F::RGB32_SFLOAT:  return VK_FORMAT_R32G32B32_SFLOAT;
+  case F::RGBA32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
+  case F::RG32_SFLOAT:   return VK_FORMAT_R32G32_SFLOAT;
+  case F::RGBA16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case F::BGRA8_SRGB:    return VK_FORMAT_B8G8R8A8_SRGB;
+  case F::RGBA8_SRGB:    return VK_FORMAT_R8G8B8A8_SRGB;
+  case F::RGBA8_UNORM:   return VK_FORMAT_R8G8B8A8_UNORM;
+  case F::D32_SFLOAT:    return VK_FORMAT_D32_SFLOAT;
+  default:               return VK_FORMAT_UNDEFINED;
+  }
+}
+
+}
+
 VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
-                               VkFormat colorFormat,
-                               const VulkanShaderModule& vertexShader,
-                               const VulkanShaderModule& fragmentShader)
+                               const Sky::RHI::GraphicsPipelineDesc& desc,
+                               VkShaderModule vertexShader, VkShaderModule fragmentShader)
 {
   m_Device = device.handle();
 
   VkPipelineShaderStageCreateInfo vertStage{};
   vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-  vertStage.module = vertexShader.handle();
+  vertStage.module = vertexShader;
   vertStage.pName = "main";
 
   VkPipelineShaderStageCreateInfo fragStage{};
   fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  fragStage.module = fragmentShader.handle();
+  fragStage.module = fragmentShader;
   fragStage.pName = "main";
 
   const std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = { vertStage, fragStage };
 
   VkVertexInputBindingDescription binding{};
   binding.binding = 0;
-  binding.stride = sizeof(float) * 6;
+  binding.stride = desc.vertexStride;
   binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-  VkVertexInputAttributeDescription attrs[2]{};
-  attrs[0].location = 0; attrs[0].binding = 0;
-  attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-  attrs[0].offset = 0;
-  attrs[1].location = 1; attrs[1].binding = 0;
-  attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-  attrs[1].offset = sizeof(float) * 3;
+  std::vector<VkVertexInputAttributeDescription> attrs;
+  for (const auto& a : desc.vertexAttributes)
+  {
+    VkVertexInputAttributeDescription va{};
+    va.location = a.location;
+    va.binding = 0;
+    va.format = toVkFormat(a.format);
+    va.offset = a.offset;
+    attrs.push_back(va);
+  }
 
   VkPipelineVertexInputStateCreateInfo vertexInput{};
   vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInput.vertexBindingDescriptionCount = 1;
-  vertexInput.pVertexBindingDescriptions = &binding;
-  vertexInput.vertexAttributeDescriptionCount = 2;
-  vertexInput.pVertexAttributeDescriptions = attrs;
+  vertexInput.vertexBindingDescriptionCount   = desc.vertexStride > 0 ? 1 : 0;
+  vertexInput.pVertexBindingDescriptions      = desc.vertexStride > 0 ? &binding : nullptr;
+  vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrs.size());
+  vertexInput.pVertexAttributeDescriptions    = attrs.data();
 
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
   inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -101,10 +126,12 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
   SKY_RHI_VK_CHECK(vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_Layout),
                "Failed to create pipeline layout");
 
+  VkFormat colorFmt = toVkFormat(desc.colorFormat);
+
   VkPipelineRenderingCreateInfoKHR renderingInfo{};
   renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
   renderingInfo.colorAttachmentCount = 1;
-  renderingInfo.pColorAttachmentFormats = &colorFormat;
+  renderingInfo.pColorAttachmentFormats = &colorFmt;
 
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -129,6 +156,12 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
                "Failed to create graphics pipeline");
 
   SKY_RHI_INFO("Graphics pipeline created");
+
+
+
+
+
+
 }
 
 VulkanPipeline::~VulkanPipeline() noexcept

@@ -18,6 +18,29 @@ std::unique_ptr<Sky::RHI::VulkanSwapchainEntry> makeSwapchainEntry(
   return std::make_unique<Sky::RHI::VulkanSwapchainEntry>(instance, device, vkFactory, width, height);
 }
 
+std::vector<uint32_t> loadSpirv(const std::string& path)
+{
+  std::ifstream file(path, std::ios::ate | std::ios::binary);
+  if (!file.is_open()) throw std::runtime_error("Failed to open shader: "+ path);
+  const size_t sizeBytes = file.tellg();
+  std::vector<uint32_t> buf(sizeBytes / sizeof(uint32_t));
+  file.seekg(0);
+  file.read(reinterpret_cast<char*>(buf.data()), sizeBytes);
+  return buf;
+}
+
+Sky::RHI::Format toSkyFormat(VkFormat f)
+{
+  switch (f)
+  {
+  case VK_FORMAT_B8G8R8A8_SRGB:  return Sky::RHI::Format::BGRA8_SRGB;
+  case VK_FORMAT_R8G8B8A8_SRGB:  return Sky::RHI::Format::RGBA8_SRGB;
+  case VK_FORMAT_B8G8R8A8_UNORM: return Sky::RHI::Format::BGRA8_UNORM;
+  case VK_FORMAT_R8G8B8A8_UNORM: return Sky::RHI::Format::RGBA8_UNORM;
+  default:                       return Sky::RHI::Format::Undefined;
+  }
+}
+
 }
 
 namespace Sky::RHI
@@ -30,10 +53,6 @@ Device::Impl::Impl(const DeviceCreateInfo& info)
     makeSwapchainEntry(instance, device, info.surfaceFactory,
                                info.initialWindowWidth, info.initialWindowHeight)))
   , defaultEntry(swapchainPool.resolve(defaultSwapchainHandle))
-  , vertShader(device, info.vertShaderPath)
-  , fragShader(device, info.fragShaderPath)
-  , trianglePipelineHandle(pipelinePool.allocate(
-    std::make_unique<VulkanPipeline>(device, defaultEntry->swapchain.imageFormat(), vertShader, fragShader)))
   , commandPool(device)
 {
   commandBuffer = commandPool.allocatePrimary();
@@ -121,76 +140,6 @@ void Device::Impl::endFrame()
   vkQueuePresentKHR(device.graphicQueue(), &presentInfo);
 }
 
-void Device::Impl::recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex)
-{
-  const VkImage     image     = defaultEntry->swapchain.images()[imageIndex];
-  const VkImageView imageView = defaultEntry->swapchain.imageViews()[imageIndex];
-  const VkExtent2D  extent    = defaultEntry->swapchain.extent();
-
-  // Transition the acquired swapchain image: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL.
-  VkImageMemoryBarrier toColor{};
-  toColor.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  toColor.srcAccessMask = 0;
-  toColor.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  toColor.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  toColor.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  toColor.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  toColor.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  toColor.image = image;
-  toColor.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-
-  vkCmdPipelineBarrier(cmd,
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      0, 0, nullptr, 0, nullptr, 1, &toColor);
-
-  VkRenderingAttachmentInfoKHR colorAttachment{};
-  colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-  colorAttachment.imageView = imageView;
-  colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  colorAttachment.clearValue.color = {{ 0.0f, 0.0f, 0.05f, 1.0f }};
-
-  VkRenderingInfoKHR renderingInfo{};
-  renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-  renderingInfo.renderArea.offset = { 0, 0 };
-  renderingInfo.renderArea.extent = extent;
-  renderingInfo.layerCount = 1;
-  renderingInfo.colorAttachmentCount = 1;
-  renderingInfo.pColorAttachments = &colorAttachment;
-
-  vkCmdBeginRenderingKHR(cmd, &renderingInfo);
-
-  {
-    CommandList commandList = createCommandList(cmd);
-    commandList.bindPipeline(trianglePipelineHandle);
-    commandList.setViewport(0.0f, 0.0f,
-                            static_cast<float>(extent.width),
-                            static_cast<float>(extent.height));
-    commandList.setScissor(0, 0, extent.width, extent.height);
-    commandList.draw(3);
-  }
-
-  vkCmdEndRenderingKHR(cmd);
-
-  // Transition for presentation: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR.
-  VkImageMemoryBarrier toPresent{};
-  toPresent.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  toPresent.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  toPresent.dstAccessMask = 0;
-  toPresent.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  toPresent.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-  toPresent.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  toPresent.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  toPresent.image = image;
-  toPresent.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-
-  vkCmdPipelineBarrier(cmd,
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      0, 0, nullptr, 0, nullptr, 1, &toPresent);
-}
 
 void Device::Impl::immediateSubmit(const std::function<void(VkCommandBuffer)>& record)
 {
@@ -224,50 +173,30 @@ void Device::Impl::waitIdle() const
   vkDeviceWaitIdle(device.handle());
 }
 
-Device::Device(const DeviceCreateInfo& info) :
-  m_Impl(std::make_unique<Impl>(info))
-{
-  const float verts[]
-  {
-    0.0f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   // top    — red
-     0.5f,  0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   // right  — green
-    -0.5f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f,  // left   — blue
-  };
-
-  m_Impl->triangleVertexBuffer = createBuffer({sizeof(verts),
-    BufferUsage::Vertex | BufferUsage::TransferDst,
-    MemoryType::GpuOnly});
-
-  uploadBufferData(m_Impl->triangleVertexBuffer, verts, sizeof(verts));
-}
+Device::Device(const DeviceCreateInfo& info) : m_Impl(std::make_unique<Impl>(info)) {}
 
 Device::~Device() noexcept = default;
 
-void Device::drawFrame()
+void Device::beginFrame()
 {
   m_Impl->beginFrame();
+}
 
-  struct TriData { FGResource backbuffer; };
-  FrameGraph fg(*this);
-  fg.addRasterPass<TriData>("Triangle",
-    [&](PassBuilder& b, TriData& d){
-      d.backbuffer = b.writeColor(b.importSwapchain(m_Impl->defaultSwapchainHandle));
-    },
-    [&](const TriData&, FGResources&, CommandList& cmd){
-      const auto extent = m_Impl->defaultEntry->swapchain.extent();
-      cmd.bindPipeline(m_Impl->trianglePipelineHandle);
-      cmd.bindVertexBuffer(m_Impl->triangleVertexBuffer);
-      cmd.setViewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
-      cmd.setScissor(0, 0, extent.width, extent.height);
-      cmd.draw(3);
-    });
+void Device::endFrame()
+{
+  m_Impl->endFrame();
+}
 
-  fg.compile();
-
+void Device::execute(FrameGraph& fg)
+{
   CommandList cmd = m_Impl->createCommandList(m_Impl->commandBuffer);
   fg.execute(cmd);
+}
 
-  m_Impl->endFrame();
+Format Device::swapchainFormat(SwapchainHandle handle) const
+{
+  VulkanSwapchainEntry* entry = m_Impl->swapchainPool.resolve(handle);
+  return entry ? toSkyFormat(entry->swapchain.imageFormat()) : Format::Undefined;
 }
 
 void Device::waitIdle() const { m_Impl->waitIdle(); }
@@ -287,6 +216,14 @@ void Device::destroySwapchain(SwapchainHandle handle) noexcept
 SwapchainHandle Device::defaultSwapchain() const noexcept
 {
   return m_Impl->defaultSwapchainHandle;
+}
+
+Extent2D Device::swapchainExtent(SwapchainHandle handle) const
+{
+  VulkanSwapchainEntry* entry = m_Impl->swapchainPool.resolve(handle);
+  if (!entry) return {};
+  const auto [width, height] = entry->swapchain.extent();
+  return { width, height };
 }
 
 BufferHandle Device::createBuffer(const BufferDesc& desc)
@@ -333,6 +270,37 @@ void Device::uploadBufferData(BufferHandle handle, const void* data, uint64_t si
     region.size = size;
     vkCmdCopyBuffer(cmd, staging.handle(), dst->handle(), 1, &region);
   });
+}
+
+ShaderHandle Device::createShader(const ShaderDesc& desc)
+{
+  return m_Impl->shaderPool.allocate(
+    std::make_unique<VulkanShaderModule>(m_Impl->device, desc.code, desc.codeSize));
+}
+
+void Device::destroyShader(ShaderHandle handle) noexcept
+{
+  m_Impl->shaderPool.deallocate(handle);
+}
+
+PipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
+{
+  VulkanShaderModule* vs = m_Impl->shaderPool.resolve(desc.vertexShader);
+  VulkanShaderModule* fs = m_Impl->shaderPool.resolve(desc.fragmentShader);
+
+  if (!vs || !fs)
+  {
+    SKY_RHI_ERROR("createGraphicsPipeline: invalid shader handle");
+    return {};
+  }
+
+  return m_Impl->pipelinePool.allocate(
+    std::make_unique<VulkanPipeline>(m_Impl->device, desc, vs->handle(), fs->handle()));
+}
+
+void Device::destroyPipeline(PipelineHandle handle) noexcept
+{
+  m_Impl->pipelinePool.deallocate(handle);
 }
 
 } // namespace Sky::RHI
