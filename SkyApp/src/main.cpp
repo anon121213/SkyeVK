@@ -25,7 +25,7 @@ static std::vector<uint32_t> loadSpirv(const std::string& path)
 
 struct Vertex {
   float pos[3];
-  float color[3];
+  float uv[2];
 };
 
 int main()
@@ -51,50 +51,80 @@ int main()
 
     Sky::RHI::Device device(info);
 
+    // перед device, или в try после device:
+    constexpr uint32_t TEX = 256;
+    std::vector<uint32_t> pixels(TEX * TEX);
+    for (uint32_t y = 0; y < TEX; ++y)
+      for (uint32_t x = 0; x < TEX; ++x)
+      {
+        const bool check = ((x / 32) + (y / 32)) % 2 == 0;
+        pixels[y * TEX + x] = check ? 0xFFFFFFFF : 0xFF404040;   // белый / тёмно-серый (RGBA)
+      }
+
+    auto texture = device.createTexture({ Sky::RHI::Format::RGBA8_UNORM, TEX, TEX, Sky::RHI::TextureUsage::Sampled });
+    device.uploadTextureData(texture, pixels.data(), pixels.size() * sizeof(uint32_t));
+
+    auto sampler = device.createSampler({});
+
+    Sky::RHI::DescriptorSetLayoutDesc layoutDesc{};
+    layoutDesc.bindings = {
+      {
+        0, Sky::RHI::DescriptorType::CombinedImageSampler,
+        Sky::RHI::ShaderStage::Fragment
+      } };
+    auto descLayout = device.createDescriptorSetLayout(layoutDesc);
+
+    auto descSet = device.createDescriptorSet(descLayout);
+    device.updateDescriptorSetTexture(descSet, 0, texture, sampler);
+
     auto vertCode = loadSpirv(std::string(SHADER_DIR) + "/triangle.vert.spv");
     auto fragCode = loadSpirv(std::string(SHADER_DIR) + "/triangle.frag.spv");
 
-    // main.cpp — setup (один раз):
     auto vs = device.createShader({ vertCode.data(), vertCode.size() * sizeof(uint32_t) });
     auto fs = device.createShader({ fragCode.data(), fragCode.size() * sizeof(uint32_t) });
 
     const auto sw = device.defaultSwapchain();
 
     const std::vector<Sky::RHI::VertexAttribute> attrs = {
-      { 0, Sky::RHI::Format::RGB32_SFLOAT, offsetof(Vertex, pos)   },   // location 0 = pos
-      { 1, Sky::RHI::Format::RGB32_SFLOAT, offsetof(Vertex, color) },   // location 1 = color
+      { 0, Sky::RHI::Format::RGB32_SFLOAT, offsetof(Vertex, pos) },   // location 0 = pos
+      { 1, Sky::RHI::Format::RG32_SFLOAT,  offsetof(Vertex, uv)  },   // location 1 = uv
     };
 
     Sky::RHI::GraphicsPipelineDesc pipeDesc{};
-    pipeDesc.vertexShader     = vs;
-    pipeDesc.fragmentShader   = fs;
-    pipeDesc.vertexStride     = sizeof(Vertex);
-    pipeDesc.vertexAttributes = attrs;
-    pipeDesc.colorFormat      = device.swapchainFormat(sw);  // matching swapchain format
-    pipeDesc.depthFormat      = Sky::RHI::Format::D32_SFLOAT;
-    pipeDesc.pushConstantSize = sizeof(glm::mat4);
+    pipeDesc.vertexShader        = vs;
+    pipeDesc.fragmentShader      = fs;
+    pipeDesc.vertexStride        = sizeof(Vertex);
+    pipeDesc.vertexAttributes    = attrs;
+    pipeDesc.colorFormat         = device.swapchainFormat(sw);  // matching swapchain format
+    pipeDesc.depthFormat         = Sky::RHI::Format::D32_SFLOAT;
+    pipeDesc.pushConstantSize    = sizeof(glm::mat4);
+    pipeDesc.descriptorSetLayout = descLayout;
 
     const auto pipeline = device.createGraphicsPipeline(pipeDesc);
 
-    const Vertex verts[8] = {
-      {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}},   // 0
-      {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},   // 1
-      {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},   // 2
-      {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},   // 3
-      {{-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},   // 4
-      {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},   // 5
-      {{ 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},   // 6
-      {{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}},   // 7
+    const Vertex verts[24] = {
+      // front (z=-0.5)
+      {{-0.5f,-0.5f,-0.5f},{0,0}}, {{ 0.5f,-0.5f,-0.5f},{1,0}}, {{ 0.5f, 0.5f,-0.5f},{1,1}}, {{-0.5f, 0.5f,-0.5f},{0,1}},
+      // back (z=+0.5)
+      {{ 0.5f,-0.5f, 0.5f},{0,0}}, {{-0.5f,-0.5f, 0.5f},{1,0}}, {{-0.5f, 0.5f, 0.5f},{1,1}}, {{ 0.5f, 0.5f, 0.5f},{0,1}},
+      // left (x=-0.5)
+      {{-0.5f,-0.5f, 0.5f},{0,0}}, {{-0.5f,-0.5f,-0.5f},{1,0}}, {{-0.5f, 0.5f,-0.5f},{1,1}}, {{-0.5f, 0.5f, 0.5f},{0,1}},
+      // right (x=+0.5)
+      {{ 0.5f,-0.5f,-0.5f},{0,0}}, {{ 0.5f,-0.5f, 0.5f},{1,0}}, {{ 0.5f, 0.5f, 0.5f},{1,1}}, {{ 0.5f, 0.5f,-0.5f},{0,1}},
+      // top (y=+0.5)
+      {{-0.5f, 0.5f,-0.5f},{0,0}}, {{ 0.5f, 0.5f,-0.5f},{1,0}}, {{ 0.5f, 0.5f, 0.5f},{1,1}}, {{-0.5f, 0.5f, 0.5f},{0,1}},
+      // bottom (y=-0.5)
+      {{-0.5f,-0.5f, 0.5f},{0,0}}, {{ 0.5f,-0.5f, 0.5f},{1,0}}, {{ 0.5f,-0.5f,-0.5f},{1,1}}, {{-0.5f,-0.5f,-0.5f},{0,1}},
     };
 
     const uint16_t indices[36] = {
-      0, 1, 2,  2, 3, 0,   // front  (z = -0.5)
-      4, 5, 6,  6, 7, 4,   // back   (z = +0.5)
-      0, 3, 7,  7, 4, 0,   // left   (x = -0.5)
-      1, 2, 6,  6, 5, 1,   // right  (x = +0.5)
-      3, 2, 6,  6, 7, 3,   // top    (y = +0.5)
-      0, 1, 5,  5, 4, 0,   // bottom (y = -0.5)
-    };
+      0, 1, 2,  2, 3, 0,     // front
+      4, 5, 6,  6, 7, 4,     // back
+      8, 9,10, 10,11, 8,     // left
+     12,13,14, 14,15,12,     // right
+     16,17,18, 18,19,16,     // top
+     20,21,22, 22,23,20,     // bottom
+   };
 
     const auto ib = device.createBuffer({
       sizeof(indices),
@@ -147,6 +177,7 @@ int main()
         },
         [&](const TriData&, Sky::RHI::FGResources&, Sky::RHI::CommandList& cmd) {
           cmd.bindPipeline(pipeline);
+          cmd.bindDescriptorSet(descSet);
           cmd.pushConstants(&mvp, sizeof(mvp));
           cmd.bindVertexBuffer(vb);
           cmd.bindIndexBuffer(ib, Sky::RHI::IndexType::UInt16);

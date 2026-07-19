@@ -15,6 +15,8 @@ public:
 
   [[nodiscard]] VkImage     handle() const { return m_Image; }
   [[nodiscard]] VkImageView view()   const { return m_View; }
+  [[nodiscard]] uint32_t    width()  const { return m_Width; }
+  [[nodiscard]] uint32_t    height() const { return m_Height; }
 
 private:
   VmaAllocator  m_Allocator  = VK_NULL_HANDLE;
@@ -22,4 +24,7 @@ private:
   VkImage       m_Image      = VK_NULL_HANDLE;
   VmaAllocation m_Allocation = VK_NULL_HANDLE;
   VkImageView   m_View       = VK_NULL_HANDLE;
+
+  uint32_t m_Width  = 0;
+  uint32_t m_Height = 0;
 };

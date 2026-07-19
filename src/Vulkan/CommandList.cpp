@@ -1,8 +1,10 @@
 #include "skypch.h"
 
 #include "SkyRHI/CommandList.h"
+
 #include "SkyRHI/Device.h"
 #include "Vulkan/DeviceImpl.h"
+#include "VulkanDescriptorSet.h"
 #include "VulkanPipeline.h"
 
 namespace Sky::RHI
@@ -96,6 +98,24 @@ void CommandList::pushConstants(const void* data, uint32_t size) noexcept
                     static_cast<VkPipelineLayout>(m_BoundPipelineLayout),
                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                     0, size, data);
+}
+
+void CommandList::bindDescriptorSet(DescriptorSetHandle setHandle) noexcept
+{
+  auto* impl = static_cast<Device::Impl*>(m_DeviceImpl);
+  VulkanDescriptorSet* set = impl->descriptorSetPool.resolve(setHandle);
+
+  if (!set)
+  {
+    SKY_RHI_WARN("bindDescriptorSet: invalid handle");
+    return;
+  }
+
+  VkDescriptorSet vkSet = set->handle();
+  vkCmdBindDescriptorSets(static_cast<VkCommandBuffer>(m_NativeCmd),
+    VK_PIPELINE_BIND_POINT_GRAPHICS,
+    static_cast<VkPipelineLayout>(m_BoundPipelineLayout),
+    0, 1, &vkSet, 0, nullptr);
 }
 
 }

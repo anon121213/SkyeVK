@@ -431,4 +431,11 @@ enum class IndexType : uint32_t
     UInt32,             // 32-bit indices — up to ~4 billion vertices, needed for large scenes / GPU-driven
 };
 
+enum class DescriptorType : uint32_t
+{
+  CombinedImageSampler,   // Texture + sampler together — standard for sampling a texture in a shader
+  UniformBuffer,          // Small read-only buffer (UBO) — material params, per-frame constants
+  StorageBuffer,          // Large read/write buffer (SSBO) — GPU-driven data, compute output
+};
+
 } // namespace Sky::RHI

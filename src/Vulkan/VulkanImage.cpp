@@ -2,7 +2,7 @@
 
 VulkanImage::VulkanImage(VmaAllocator allocator, VkDevice device, VkFormat format, uint32_t width,
                          uint32_t height, VkImageUsageFlags usage, VkImageAspectFlags aspect)
-                           : m_Allocator(allocator), m_Device(device)
+                           : m_Allocator(allocator), m_Device(device), m_Width(width), m_Height(height)
 {
   VkImageCreateInfo imageInfo{};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;

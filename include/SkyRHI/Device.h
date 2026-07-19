@@ -1,10 +1,13 @@
 #pragma once
 
 #include "Buffer.h"
+#include "DescriptorSetlayout.h"
 #include "Handle.h"
 #include "Pipeline.h"
+#include "Sampler.h"
 #include "Shader.h"
 #include "Swapchain.h"
+#include "Texture.h"
 #include "Types.h"
 
 #include <functional>
@@ -62,6 +65,20 @@ public:
 
   [[nodiscard]] PipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc);
   void destroyPipeline(PipelineHandle handle) noexcept;
+
+  [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc);
+  void destroyTexture(TextureHandle handle) noexcept;
+  void uploadTextureData(TextureHandle handle, const void* data, size_t size);
+
+  [[nodiscard]] SamplerHandle createSampler(const SamplerDesc& desc);
+  void destroySampler(SamplerHandle handle) noexcept;
+
+  [[nodiscard]] DescriptorSetLayoutHandle createDescriptorSetLayout(const DescriptorSetLayoutDesc& desc);
+  void destroyDescriptorSetLayout(DescriptorSetLayoutHandle handle) noexcept;
+
+  [[nodiscard]] DescriptorSetHandle createDescriptorSet(DescriptorSetLayoutHandle layout);
+  void destroyDescriptorSet(DescriptorSetHandle handle);
+  void updateDescriptorSetTexture(DescriptorSetHandle setHandler, uint32_t binding, TextureHandle textureHandle, SamplerHandle samplerHandle);
 
   struct Impl;
 

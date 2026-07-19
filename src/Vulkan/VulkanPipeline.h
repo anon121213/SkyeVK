@@ -11,7 +11,8 @@ class VulkanPipeline
 public:
   VulkanPipeline(const VulkanDevice& device,
                  const Sky::RHI::GraphicsPipelineDesc& desc,
-                 VkShaderModule vertexShader, VkShaderModule fragmentShader);
+                 VkShaderModule vertexShader, VkShaderModule fragmentShader,
+                 VkDescriptorSetLayout descriptorSetLayout);
   ~VulkanPipeline() noexcept;
 
   VulkanPipeline(const VulkanPipeline&) = delete;

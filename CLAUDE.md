@@ -112,22 +112,30 @@ Sky::RHI::BufferHandle vb = device.createBuffer({...});   // POD, uint64_t
 - Frame lifecycle в Device::Impl (beginFrame/endFrame). VulkanRenderer/RenderPass/Framebuffers **удалены**
 - Треугольник рендерится через настоящий FG, validation чистая
 
-**Phase 2 (Buffers + Cube) — NEXT 🚧**
+**Phase 2 (Buffers + Cube) — DONE ✅ (2026-07-19)**
+- Buffers через VMA (createBuffer, uploadBufferData via staging, mapBuffer), VulkanBuffer RAII
+- Vertex + index buffers, `CommandList::bindVertexBuffer/bindIndexBuffer/drawIndexed`
+- **Public pipeline + shader creation** — createShader (bytecode), createGraphicsPipeline (GraphicsPipelineDesc: vertex layout, depth, push constants). Format→VkFormat translation.
+- Push constants + MVP (glm в SkyApp, Y-flip, depth 0-1). CommandList::pushConstants + bound layout tracking.
+- **Depth attachment** — первый transient в FG. VulkanImage (VkImage+view+VMA), deferred deletion (Impl::frameTransients, clear на beginFrame). FG execute обрабатывает Depth writes (realize создаёт transient, не resolve).
+- **Path B — все хаки Phase 1 удалены.** Consumer-driven: beginFrame/endFrame/execute(FrameGraph&). Consumer создаёт shaders/pipeline/VB/IB и сам декларирует passes. Device ctor чистый. swapchainFormat/swapchainExtent геттеры.
+- **Крутящийся 3D куб** (8 верш + 36 индексов, depth перекрытие граней), validation чистая
+
+**Известный смелл (рефактор в Phase 3):** FG execute special-cases по типу attachment (Color/Depth блоки). В Phase 3 (3-й тип = texture) обобщим: единый realize()+кеш, табличные barriers, тонкая attachment assembly. Рефактор внутренностей, не архитектуры.
+
+**Phase 3 (Textures & Materials) — NEXT 🚧**
 Задачи:
-1. Public buffer creation API (`Device::createBuffer` → BufferHandle через VMA)
-2. Vertex/index buffers, `CommandList::bindVertexBuffer/bindIndexBuffer/drawIndexed`
-3. Public pipeline creation (`GraphicsPipelineDesc` — vertex layout, blend, depth, raster state)
-4. MVP матрицы (push constants или uniform buffer), камера
-5. Куб вместо треугольника
-6. Убрать временные хаки: shader paths из DeviceCreateInfo, hardcoded triangle pipeline, FG строится внутри drawFrame → consumer-driven
+1. `SkyRHI::Texture` (VulkanImage переиспользуется — 2D/3D/Array/Cubemap), `Sampler`
+2. `uploadTextureData` через staging (image copy)
+3. **Descriptor sets** (`DescriptorSetLayout`, `DescriptorSet`) — как шейдеры видят текстуры/UBO. Фундамент под PBR.
+4. Bindless preparation (descriptor arrays в API, не активны)
+5. stb_image loading (в SkyApp)
+6. Текстурированный куб
+7. `SkyGraphics::Material` — первый Sky::Graphics класс
 
-**Треугольник/куб должен продолжать работать после каждой фазы.**
+**Не сделано в Phase 2 (опц. polish):** `SkyGraphics::Camera` — view/proj inline в main.cpp через glm.
 
-**Phase 2 прогресс:**
-- ✅ Buffers через VMA (createBuffer, uploadBufferData via staging, mapBuffer)
-- ✅ Треугольник из vertex buffer (vertex input в pipeline)
-- ✅ **Path B DONE — все хаки Phase 1 удалены.** Public createShader/createGraphicsPipeline, consumer-driven rendering (beginFrame/endFrame/execute(FrameGraph&)). Consumer создаёт shaders/pipeline/VB и сам декларирует passes. Device ctor чистый.
-- 🚧 Дальше: index buffer + drawIndexed, depth (transient через FG), push constants + MVP + камера, куб.
+**Куб должен продолжать работать после каждой фазы.**
 
 **Оставшиеся stub'ы (не хаки — отложенная функциональность):**
 - FGResources::getTexture — stub; realization только imported swapchain (transient VkImage — depth в Phase 2, textures в Phase 3)

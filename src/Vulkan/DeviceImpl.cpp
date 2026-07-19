@@ -3,6 +3,8 @@
 #include "DeviceImpl.h"
 
 #include "SkyRHI/FrameGraph.h"
+#include "VulkanDescriptorSet.h"
+#include "VulkanTranslate.h"
 
 namespace
 {
@@ -18,27 +20,22 @@ std::unique_ptr<Sky::RHI::VulkanSwapchainEntry> makeSwapchainEntry(
   return std::make_unique<Sky::RHI::VulkanSwapchainEntry>(instance, device, vkFactory, width, height);
 }
 
-std::vector<uint32_t> loadSpirv(const std::string& path)
+void transitionImageLayout(VkCommandBuffer cmd, VkImage image,
+                           VkImageLayout oldLayout, VkImageLayout newLayout,
+                           VkAccessFlags srcAccess, VkAccessFlags dstAccess,
+                           VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage)
 {
-  std::ifstream file(path, std::ios::ate | std::ios::binary);
-  if (!file.is_open()) throw std::runtime_error("Failed to open shader: "+ path);
-  const size_t sizeBytes = file.tellg();
-  std::vector<uint32_t> buf(sizeBytes / sizeof(uint32_t));
-  file.seekg(0);
-  file.read(reinterpret_cast<char*>(buf.data()), sizeBytes);
-  return buf;
-}
-
-Sky::RHI::Format toSkyFormat(VkFormat f)
-{
-  switch (f)
-  {
-  case VK_FORMAT_B8G8R8A8_SRGB:  return Sky::RHI::Format::BGRA8_SRGB;
-  case VK_FORMAT_R8G8B8A8_SRGB:  return Sky::RHI::Format::RGBA8_SRGB;
-  case VK_FORMAT_B8G8R8A8_UNORM: return Sky::RHI::Format::BGRA8_UNORM;
-  case VK_FORMAT_R8G8B8A8_UNORM: return Sky::RHI::Format::RGBA8_UNORM;
-  default:                       return Sky::RHI::Format::Undefined;
-  }
+  VkImageMemoryBarrier b{};
+  b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  b.oldLayout = oldLayout;
+  b.newLayout = newLayout;
+  b.srcAccessMask = srcAccess;
+  b.dstAccessMask = dstAccess;
+  b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  b.image = image;
+  b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+  vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &b);
 }
 
 }
@@ -56,6 +53,19 @@ Device::Impl::Impl(const DeviceCreateInfo& info)
   , commandPool(device)
 {
   commandBuffer = commandPool.allocatePrimary();
+
+  VkDescriptorPoolSize poolSize[] = {
+    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100 },
+    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
+  };
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.maxSets = 100;
+  poolInfo.poolSizeCount = 3;
+  poolInfo.pPoolSizes = poolSize;
+  SKY_RHI_VK_CHECK(vkCreateDescriptorPool(device.handle(), &poolInfo, nullptr,
+    &descriptorPool), "Failed to create descriptor pool");
 
   renderFinished.resize(defaultEntry->swapchain.images().size());
 
@@ -82,6 +92,8 @@ Device::Impl::Impl(const DeviceCreateInfo& info)
 Device::Impl::~Impl()
 {
   vkDeviceWaitIdle(device.handle());
+
+  vkDestroyDescriptorPool(device.handle(), descriptorPool, nullptr);
 
   vkDestroyFence(device.handle(), inFlight, nullptr);
 
@@ -296,13 +308,134 @@ PipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc)
     return {};
   }
 
+  VulkanDescriptorSetLayout* dsl = m_Impl->descriptorSetLayoutPool.resolve(desc.descriptorSetLayout);
+  VkDescriptorSetLayout dslHandle = dsl ? dsl->handle() : VK_NULL_HANDLE;
+
   return m_Impl->pipelinePool.allocate(
-    std::make_unique<VulkanPipeline>(m_Impl->device, desc, vs->handle(), fs->handle()));
+    std::make_unique<VulkanPipeline>(m_Impl->device, desc, vs->handle(), fs->handle(), dslHandle));
 }
 
 void Device::destroyPipeline(PipelineHandle handle) noexcept
 {
   m_Impl->pipelinePool.deallocate(handle);
+}
+
+TextureHandle Device::createTexture(const TextureDesc& desc)
+{
+  const VkImageUsageFlags usage = toVkImageUsage(desc.usage) | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+  return m_Impl->texturePool.allocate(std::make_unique<VulkanImage>(
+    m_Impl->device.allocator(), m_Impl->device.handle(),
+    toVkFormat(desc.format), desc.width, desc.height,
+    usage, VK_IMAGE_ASPECT_COLOR_BIT));
+}
+
+void Device::destroyTexture(TextureHandle handle) noexcept
+{
+  m_Impl->texturePool.deallocate(handle);
+}
+
+void Device::uploadTextureData(TextureHandle handle, const void* data, size_t size)
+{
+  VulkanImage* tex = m_Impl->texturePool.resolve(handle);
+  if (!tex)
+  {
+    SKY_RHI_WARN("uploadTextureData: invalid texture handle");
+    return;
+  }
+
+  VulkanBuffer staging(m_Impl->device.allocator(),
+{ size, BufferUsage::TransferSrc, MemoryType::CpuOnly });
+  vmaCopyMemoryToAllocation(m_Impl->device.allocator(), data, staging.allocation(), 0, size);
+
+  m_Impl->immediateSubmit([&](VkCommandBuffer cmd)
+  {
+    transitionImageLayout(cmd, tex->handle(),
+      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      0, VK_ACCESS_TRANSFER_WRITE_BIT,
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    region.imageExtent = { tex->width(), tex->height(), 1 };
+    vkCmdCopyBufferToImage(cmd, staging.handle(), tex->handle(),
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    transitionImageLayout(cmd, tex->handle(),
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+  });
+}
+
+SamplerHandle Device::createSampler(const SamplerDesc& desc)
+{
+  return m_Impl->samplerPool.allocate(
+    std::make_unique<VulkanSampler>(m_Impl->device.handle(), desc));
+}
+
+void Device::destroySampler(SamplerHandle handle) noexcept
+{
+  m_Impl->samplerPool.deallocate(handle);
+}
+
+DescriptorSetLayoutHandle Device::createDescriptorSetLayout(const DescriptorSetLayoutDesc& desc)
+{
+  return m_Impl->descriptorSetLayoutPool.allocate(
+    std::make_unique<VulkanDescriptorSetLayout>(m_Impl->device.handle(), desc));
+}
+
+void Device::destroyDescriptorSetLayout(DescriptorSetLayoutHandle handle) noexcept
+{
+  m_Impl->descriptorSetLayoutPool.deallocate(handle);
+}
+
+DescriptorSetHandle Device::createDescriptorSet(DescriptorSetLayoutHandle layout)
+{
+  VulkanDescriptorSetLayout* dsl = m_Impl->descriptorSetLayoutPool.resolve(layout);
+  if (!dsl)
+  {
+    SKY_RHI_ERROR("createDescriptorSet: invalid layout");
+    return {};
+  }
+
+  return m_Impl->descriptorSetPool.allocate(std::make_unique<VulkanDescriptorSet>(
+    m_Impl->device.handle(), m_Impl->descriptorPool, dsl->handle()));
+}
+
+void Device::destroyDescriptorSet(DescriptorSetHandle handle)
+{
+  m_Impl->descriptorSetPool.deallocate(handle);
+}
+
+void Device::updateDescriptorSetTexture(DescriptorSetHandle setHandler, uint32_t binding,
+                                        TextureHandle textureHandle, SamplerHandle samplerHandle)
+{
+  VulkanDescriptorSet* set = m_Impl->descriptorSetPool.resolve(setHandler);
+  VulkanImage*         tex     = m_Impl->texturePool.resolve(textureHandle);
+  VulkanSampler*       sampler = m_Impl->samplerPool.resolve(samplerHandle);
+
+  if (!set || !tex || !sampler)
+  {
+    SKY_RHI_ERROR("updateDescriptorSetTexture: invalid handle");
+    return;
+  }
+
+  VkDescriptorImageInfo imageInfo{};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView   = tex->view();
+  imageInfo.sampler     = sampler->handle();
+
+  VkWriteDescriptorSet write{};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.dstSet = set->handle();
+  write.dstBinding = binding;
+  write.descriptorCount = 1;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  write.pImageInfo = &imageInfo;
+
+  vkUpdateDescriptorSets(m_Impl->device.handle(), 1, &write, 0, nullptr);
 }
 
 } // namespace Sky::RHI

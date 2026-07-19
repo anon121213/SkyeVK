@@ -38,6 +38,7 @@ public:
     int32_t  vertexOffset  = 0,
     uint32_t firstInstance = 0) noexcept;
   void pushConstants(const void* data, uint32_t size) noexcept;
+  void bindDescriptorSet(DescriptorSetHandle setHandle) noexcept;
 
 private:
   friend class Device;

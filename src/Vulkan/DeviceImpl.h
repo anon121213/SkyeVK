@@ -1,18 +1,21 @@
 #pragma once
 
 #include "Common/HandleAllocator.h"
-#include "SkyRHI/Device.h"
 #include "SkyRHI/CommandList.h"
+#include "SkyRHI/Device.h"
 #include "VulkanBuffer.h"
 #include "VulkanCommandPool.h"
+#include "VulkanDescriptorSetLayout.h"
 #include "VulkanDevice.h"
+#include "VulkanImage.h"
 #include "VulkanInstance.h"
 #include "VulkanPipeline.h"
+#include "VulkanSampler.h"
 #include "VulkanShaderModule.h"
 #include "VulkanSurface.h"
 #include "VulkanSwapchain.h"
-#include "VulkanImage.h"
 
+class VulkanDescriptorSet;
 namespace Sky::RHI
 {
 
@@ -52,6 +55,15 @@ struct Device::Impl
   HandleAllocator<BufferHandle, VulkanBuffer> bufferPool;
 
   HandleAllocator<ShaderHandle, VulkanShaderModule> shaderPool;
+
+  HandleAllocator<TextureHandle, VulkanImage> texturePool;
+
+  HandleAllocator<SamplerHandle, VulkanSampler> samplerPool;
+
+  HandleAllocator<DescriptorSetLayoutHandle, VulkanDescriptorSetLayout> descriptorSetLayoutPool;
+
+  VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+  HandleAllocator<DescriptorSetHandle, VulkanDescriptorSet> descriptorSetPool;
 
   std::vector<std::unique_ptr<VulkanImage>> frameTransients;
 

@@ -4,32 +4,12 @@
 #include "VulkanDevice.h"
 #include "VulkanPipeline.h"
 #include "VulkanShaderModule.h"
-
-namespace
-{
-
-VkFormat toVkFormat(Sky::RHI::Format f)
-{
-  using F = Sky::RHI::Format;
-  switch (f)
-  {
-  case F::RGB32_SFLOAT:  return VK_FORMAT_R32G32B32_SFLOAT;
-  case F::RGBA32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
-  case F::RG32_SFLOAT:   return VK_FORMAT_R32G32_SFLOAT;
-  case F::RGBA16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
-  case F::BGRA8_SRGB:    return VK_FORMAT_B8G8R8A8_SRGB;
-  case F::RGBA8_SRGB:    return VK_FORMAT_R8G8B8A8_SRGB;
-  case F::RGBA8_UNORM:   return VK_FORMAT_R8G8B8A8_UNORM;
-  case F::D32_SFLOAT:    return VK_FORMAT_D32_SFLOAT;
-  default:               return VK_FORMAT_UNDEFINED;
-  }
-}
-
-}
+#include "VulkanTranslate.h"
 
 VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
                                const Sky::RHI::GraphicsPipelineDesc& desc,
-                               VkShaderModule vertexShader, VkShaderModule fragmentShader)
+                               VkShaderModule vertexShader, VkShaderModule fragmentShader,
+                               VkDescriptorSetLayout descriptorSetLayout)
 {
   m_Device = device.handle();
 
@@ -133,8 +113,8 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device,
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = 0;
-  pipelineLayoutInfo.pSetLayouts = nullptr;
+  pipelineLayoutInfo.setLayoutCount = descriptorSetLayout != VK_NULL_HANDLE ? 1 : 0;
+  pipelineLayoutInfo.pSetLayouts = descriptorSetLayout != VK_NULL_HANDLE ? &descriptorSetLayout : nullptr;
   pipelineLayoutInfo.pushConstantRangeCount = desc.pushConstantSize > 0 ? 1 : 0;
   pipelineLayoutInfo.pPushConstantRanges = desc.pushConstantSize > 0 ? &pcRange : nullptr;
 

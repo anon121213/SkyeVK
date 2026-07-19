@@ -25,7 +25,8 @@ struct GraphicsPipelineDesc
   std::vector<VertexAttribute> vertexAttributes;
   Format                       colorFormat = Format::Undefined;   // color attachment format (dynamic rendering)
   Format                       depthFormat = Format::Undefined;
-  uint32_t                     pushConstantSize = 0;  // bytes of push constant data (0 = none)
+  uint32_t                     pushConstantSize = 0;              // bytes of push constant data (0 = none)
+  DescriptorSetLayoutHandle descriptorSetLayout;                  // optional — 0 = no descriptors
 };
 
 }

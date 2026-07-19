@@ -22,17 +22,18 @@ struct Handle
   constexpr bool operator==(const Handle&) const noexcept = default;
 };
 
-struct BufferTag {};             using BufferHandle          = Handle<BufferTag>;
-struct TextureTag {};            using TextureHandle         = Handle<TextureTag>;
-struct SamplerTag {};            using SamplerHandle         = Handle<SamplerTag>;
-struct ShaderTag {};             using ShaderHandle          = Handle<ShaderTag>;
-struct PipelineTag {};           using PipelineHandle        = Handle<PipelineTag>;
-struct PipelineLayoutTag {};     using PipelineLayoutHandle  = Handle<PipelineLayoutTag>;
-struct SwapchainTag {};          using SwapchainHandle       = Handle<SwapchainTag>;
-struct CommandListTag {};        using CommandListHandle     = Handle<CommandListTag>;
-struct FenceTag {};              using FenceHandle           = Handle<FenceTag>;
-struct SemaphoreTag {};          using SemaphoreHandle       = Handle<SemaphoreTag>;
-struct DescriptorSetTag {};      using DescriptorSetHandle   = Handle<DescriptorSetTag>;
-struct AccelStructureTag {};     using AccelStructureHandle  = Handle<AccelStructureTag>;
+struct BufferTag {};              using BufferHandle              = Handle<BufferTag>;
+struct TextureTag {};             using TextureHandle             = Handle<TextureTag>;
+struct SamplerTag {};             using SamplerHandle             = Handle<SamplerTag>;
+struct ShaderTag {};              using ShaderHandle              = Handle<ShaderTag>;
+struct PipelineTag {};            using PipelineHandle            = Handle<PipelineTag>;
+struct PipelineLayoutTag {};      using PipelineLayoutHandle      = Handle<PipelineLayoutTag>;
+struct SwapchainTag {};           using SwapchainHandle           = Handle<SwapchainTag>;
+struct CommandListTag {};         using CommandListHandle         = Handle<CommandListTag>;
+struct FenceTag {};               using FenceHandle               = Handle<FenceTag>;
+struct SemaphoreTag {};           using SemaphoreHandle           = Handle<SemaphoreTag>;
+struct DescriptorSetTag {};       using DescriptorSetHandle       = Handle<DescriptorSetTag>;
+struct DescriptorSetLayoutTag {}; using DescriptorSetLayoutHandle = Handle<DescriptorSetLayoutTag>;
+struct AccelStructureTag {};      using AccelStructureHandle      = Handle<AccelStructureTag>;
 
 }

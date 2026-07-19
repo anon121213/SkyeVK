@@ -61,6 +61,16 @@ add_library(SkyRenderer STATIC
         include/SkyRHI/Pipeline.h
         src/Vulkan/VulkanImage.h
         src/Vulkan/VulkanImage.cpp
+        src/Vulkan/VulkanTranslate.h
+        include/SkyRHI/Texture.h
+        include/SkyRHI/Sampler.h
+        src/Vulkan/VulkanSampler.h
+        src/Vulkan/VulkanSampler.cpp
+        include/SkyRHI/DescriptorSetlayout.h
+        src/Vulkan/VulkanDescriptorSetLayout.cpp
+        src/Vulkan/VulkanDescriptorSetLayout.h
+        src/Vulkan/VulkanDescriptorSet.cpp
+        src/Vulkan/VulkanDescriptorSet.h
 )
 
 target_include_directories(SkyRenderer
